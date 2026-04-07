@@ -38,6 +38,7 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip }: YouT
   const [apiReady, setApiReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
 
   // Extract YouTube video ID from URL
   const getVideoId = (url: string): string | null => {
@@ -140,12 +141,22 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip }: YouT
   // Sync player with current song
   useEffect(() => {
     if (!isReady || !playerRef.current || !currentSong) {
+      // Clear current video if no song
+      if (!currentSong && currentVideoId) {
+        setCurrentVideoId(null);
+      }
       return;
     }
 
     const videoId = getVideoId(currentSong.url);
     if (!videoId) {
       console.error('Invalid video ID for URL:', currentSong.url);
+      return;
+    }
+
+    // OPTIMIZATION: Only reload if video actually changed
+    if (currentVideoId === videoId) {
+      console.log('Video already loaded, skipping reload to prevent stuttering');
       return;
     }
 
@@ -162,10 +173,12 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip }: YouT
         videoId,
         startSeconds: elapsedSeconds,
       });
+
+      setCurrentVideoId(videoId);
     } catch (error) {
       console.error('Error loading video:', error);
     }
-  }, [currentSong, isReady]);
+  }, [currentSong, isReady, currentVideoId]);
 
   const handleAddSong = async () => {
     if (!songUrl.trim()) return;

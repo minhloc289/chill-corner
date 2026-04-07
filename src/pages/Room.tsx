@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabaseClient';
 import { RoomScene } from '@/components/RoomScene';
@@ -47,6 +47,7 @@ export default function Room() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [members, setMembers] = useState<RoomMember[]>([]);
   const [loading, setLoading] = useState(true);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Initialize or join room
   useEffect(() => {
@@ -138,6 +139,10 @@ export default function Room() {
       if (roomId) {
         handleLeaveRoom();
       }
+      // Cleanup debounce timer
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
       // Cleanup realtime subscription
       if (cleanup && typeof cleanup.then === 'function') {
         cleanup.then((fn) => fn && fn());
@@ -147,7 +152,7 @@ export default function Room() {
     };
   }, [roomId, navigate]);
 
-  // Update last_seen every 10 seconds
+  // Update last_seen every 20 seconds (reduced from 10s to minimize re-renders)
   useEffect(() => {
     if (!roomId) return;
 
@@ -156,7 +161,7 @@ export default function Room() {
         .from('room_members')
         .update({ last_seen: new Date().toISOString() })
         .eq('user_id', userId);
-    }, 10000);
+    }, 20000);
 
     return () => clearInterval(interval);
   }, [roomId, userId]);
@@ -214,6 +219,17 @@ export default function Room() {
     setMembers(data || []);
   };
 
+  // Debounced version to prevent excessive re-renders
+  const loadMembersDebounced = useCallback((roomIdParam: string) => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    debounceTimerRef.current = setTimeout(() => {
+      loadMembers(roomIdParam);
+    }, 300); // Wait 300ms after last update
+  }, []);
+
   const subscribeToRoom = (roomIdParam: string) => {
     // Subscribe to room changes
     const channel = supabase
@@ -247,7 +263,7 @@ export default function Room() {
         { event: '*', schema: 'public', table: 'room_members', filter: `room_id=eq.${roomIdParam}` },
         (payload) => {
           console.log('Room members changed:', payload);
-          loadMembers(roomIdParam);
+          loadMembersDebounced(roomIdParam);
         }
       )
       .subscribe((status) => {
@@ -286,16 +302,16 @@ export default function Room() {
     }
   };
 
-  const handleWeatherChange = async (weather: 'sun' | 'rain' | 'night') => {
+  const handleWeatherChange = useCallback(async (weather: 'sun' | 'rain' | 'night') => {
     if (!roomId) return;
 
     await supabase
       .from('rooms')
       .update({ weather, updated_at: new Date().toISOString() })
       .eq('id', roomId);
-  };
+  }, [roomId]);
 
-  const handleSceneChange = async (scenePreset: string) => {
+  const handleSceneChange = useCallback(async (scenePreset: string) => {
     if (!roomId || !room) return;
 
     console.log('Changing scene to:', scenePreset);
@@ -320,9 +336,9 @@ export default function Room() {
     } else {
       console.log('Scene changed successfully');
     }
-  };
+  }, [roomId, room]);
 
-  const handleAddSong = async (url: string, title: string) => {
+  const handleAddSong = useCallback(async (url: string, title: string) => {
     if (!roomId) return;
 
     const nextPosition = playlist.length > 0 ? Math.max(...playlist.map((s) => s.position)) + 1 : 0;
@@ -361,9 +377,9 @@ export default function Room() {
         .eq('url', url)
         .eq('position', nextPosition);
     }
-  };
+  }, [roomId, playlist, username, room?.current_song_url]);
 
-  const handleSkip = async () => {
+  const handleSkip = useCallback(async () => {
     if (!roomId) return;
 
     // Get next song in queue
@@ -395,9 +411,9 @@ export default function Room() {
         })
         .eq('id', roomId);
     }
-  };
+  }, [roomId, playlist]);
 
-  const handleSendMessage = async (message: string) => {
+  const handleSendMessage = useCallback(async (message: string) => {
     if (!roomId) return;
 
     await supabase.from('messages').insert({
@@ -407,9 +423,9 @@ export default function Room() {
       message,
       message_type: 'chat',
     });
-  };
+  }, [roomId, userId, username]);
 
-  const handleRename = async (newName: string) => {
+  const handleRename = useCallback(async (newName: string) => {
     if (!roomId) return;
 
     const oldName = username;
@@ -430,7 +446,17 @@ export default function Room() {
       message: `${oldName} is now ${newName}`,
       message_type: 'system',
     });
-  };
+  }, [roomId, userId, username]);
+
+  // Memoize currentSong to prevent unnecessary re-renders in YouTubePlayer
+  const currentSongMemo = useMemo(() => {
+    if (!room?.current_song_url) return null;
+    return {
+      url: room.current_song_url,
+      title: room.current_song_title || 'Untitled',
+      startedAt: room.current_song_started_at || new Date().toISOString(),
+    };
+  }, [room?.current_song_url, room?.current_song_title, room?.current_song_started_at]);
 
   if (loading) {
     return (
@@ -448,15 +474,7 @@ export default function Room() {
           onSceneChange={handleSceneChange}
         />
         <YouTubePlayer
-          currentSong={
-            room?.current_song_url
-              ? {
-                  url: room.current_song_url,
-                  title: room.current_song_title || 'Untitled',
-                  startedAt: room.current_song_started_at || new Date().toISOString(),
-                }
-              : null
-          }
+          currentSong={currentSongMemo}
           playlist={playlist}
           onAddSong={handleAddSong}
           onSkip={handleSkip}
