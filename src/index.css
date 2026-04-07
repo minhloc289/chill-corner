@@ -248,11 +248,15 @@
 }
 
 .audio-title {
-  @apply text-sm font-semibold truncate;
+  @apply text-sm font-semibold truncate text-card-foreground;
 }
 
 .audio-subtitle {
   @apply text-xs text-muted-foreground;
+}
+
+.audio-control-bar .lucide {
+  @apply text-foreground;
 }
 
 .audio-controls-right {

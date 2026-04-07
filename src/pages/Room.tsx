@@ -270,9 +270,12 @@ export default function Room() {
   };
 
   const handleSceneChange = async (scenePreset: string) => {
-    if (!roomId) return;
+    if (!roomId || !room) return;
 
     console.log('Changing scene to:', scenePreset);
+
+    // Optimistic update - update local state immediately
+    setRoom({ ...room, scene_preset: scenePreset });
 
     const { error } = await supabase
       .from('rooms')
@@ -281,6 +284,13 @@ export default function Room() {
 
     if (error) {
       console.error('Error changing scene:', error);
+      // Revert on error
+      const { data } = await supabase
+        .from('rooms')
+        .select('*')
+        .eq('id', roomId)
+        .single();
+      if (data) setRoom(data);
     } else {
       console.log('Scene changed successfully');
     }
