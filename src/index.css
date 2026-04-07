@@ -228,13 +228,15 @@
 
 /* Audio Player */
 .audio-player-container {
-  @apply absolute bottom-0 left-0 right-80 p-4 space-y-2;
+  @apply fixed bottom-0 left-0 p-4 space-y-2;
+  right: 320px; /* Chat sidebar width */
   z-index: 50;
 }
 
 .audio-control-bar {
-  @apply flex items-center gap-4 p-3 bg-card backdrop-blur-sm shadow-lg border;
+  @apply flex items-center gap-4 p-3 bg-card backdrop-blur-sm shadow-lg border rounded-lg;
   background-color: hsl(var(--card) / 0.95);
+  min-height: 60px;
 }
 
 .audio-controls-left {

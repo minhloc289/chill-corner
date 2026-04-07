@@ -15,6 +15,8 @@ const scenePresets = [
 export function RoomScene({ scenePreset, onSceneChange }: RoomSceneProps) {
   const currentScene = scenePresets.find((s) => s.id === scenePreset) || scenePresets[0];
 
+  console.log('RoomScene render - scenePreset:', scenePreset, 'currentScene:', currentScene);
+
   const handleSceneClick = (presetId: string) => {
     console.log('Button clicked, changing to:', presetId);
     onSceneChange(presetId);
