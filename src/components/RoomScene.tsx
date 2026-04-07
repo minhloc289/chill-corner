@@ -7,7 +7,7 @@ interface RoomSceneProps {
 
 const scenePresets = [
   { id: 'scene-1', number: 1, image: '/scene-1.gif' },
-  { id: 'scene-2', number: 2, image: '/scene-2.jpg' },
+  { id: 'scene-2', number: 2, image: '/scene-2.gif' },
   { id: 'scene-3', number: 3, image: '/scene-3.gif' },
   { id: 'scene-4', number: 4, image: '/scene-4.gif' },
 ];
