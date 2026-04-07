@@ -243,33 +243,58 @@
   @apply flex items-center gap-1;
 }
 
+.audio-controls-left button {
+  color: white !important;
+}
+
+.audio-controls-left .lucide {
+  color: white !important;
+}
+
 .audio-info {
   @apply flex-1 min-w-0 px-2;
 }
 
 .audio-title {
-  @apply text-sm font-semibold truncate text-card-foreground;
+  @apply text-sm font-semibold truncate;
+  color: white !important;
 }
 
 .audio-subtitle {
-  @apply text-xs text-muted-foreground;
+  @apply text-xs;
+  color: white !important;
 }
 
 .audio-control-bar .lucide {
-  @apply text-foreground;
+  color: white !important;
 }
 
 .audio-controls-right {
   @apply flex items-center gap-2;
 }
 
+.audio-controls-right button {
+  color: white;
+}
+
 .add-song-expanded {
   @apply bg-card backdrop-blur-sm shadow-lg border rounded-lg;
   background-color: hsl(var(--card) / 0.95);
+  color: white;
+}
+
+.add-song-expanded h3,
+.add-song-expanded h4,
+.add-song-expanded p {
+  color: white !important;
 }
 
 .queue-item {
   @apply flex items-center gap-2 p-2 rounded transition;
+}
+
+.queue-item p {
+  color: white !important;
 }
 
 .queue-item:hover {
