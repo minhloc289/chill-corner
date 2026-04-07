@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { Plus, SkipForward } from 'lucide-react';
+import { Plus, SkipForward, Play, Pause, Volume2 } from 'lucide-react';
+import { Card } from './ui/card';
 
 interface Song {
   id: string;
@@ -35,6 +36,8 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip }: YouT
   const [songUrl, setSongUrl] = useState('');
   const [isReady, setIsReady] = useState(false);
   const [apiReady, setApiReady] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
 
   // Extract YouTube video ID from URL
   const getVideoId = (url: string): string | null => {
@@ -87,12 +90,12 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip }: YouT
     const initPlayer = () => {
       try {
         playerRef.current = new window.YT.Player(playerContainerId.current, {
-          height: '100%',
-          width: '100%',
+          height: '1',
+          width: '1',
           videoId: '',
           playerVars: {
             autoplay: 1,
-            controls: 1,
+            controls: 0,
             modestbranding: 1,
             rel: 0,
             origin: window.location.origin,
@@ -103,8 +106,13 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip }: YouT
               setIsReady(true);
             },
             onStateChange: (event: any) => {
-              // When video ends, skip to next
-              if (event.data === window.YT.PlayerState.ENDED) {
+              // Update playing state
+              if (event.data === window.YT.PlayerState.PLAYING) {
+                setIsPlaying(true);
+              } else if (event.data === window.YT.PlayerState.PAUSED) {
+                setIsPlaying(false);
+              } else if (event.data === window.YT.PlayerState.ENDED) {
+                setIsPlaying(false);
                 onSkip();
               }
             },
@@ -178,90 +186,131 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip }: YouT
 
       onAddSong(songUrl, title);
       setSongUrl('');
+      setShowAddForm(false);
     } catch (error) {
       console.error('Error fetching video info:', error);
       onAddSong(songUrl, 'Untitled Video');
       setSongUrl('');
+      setShowAddForm(false);
+    }
+  };
+
+  const togglePlayPause = () => {
+    if (!playerRef.current) return;
+
+    if (isPlaying) {
+      playerRef.current.pauseVideo();
+    } else {
+      playerRef.current.playVideo();
     }
   };
 
   return (
-    <div className="youtube-player-container">
-      <div className="player-wrapper">
-        <div className="player-embed">
-          <div id={playerContainerId.current} style={{ width: '100%', height: '100%' }} />
-          {!apiReady && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black text-white">
-              Loading YouTube player...
-            </div>
+    <div className="audio-player-container">
+      {/* Hidden YouTube player */}
+      <div id={playerContainerId.current} style={{ position: 'absolute', left: '-9999px' }} />
+
+      {/* Compact Audio Control Bar */}
+      <Card className="audio-control-bar">
+        <div className="audio-controls-left">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={togglePlayPause}
+            disabled={!currentSong}
+            className="h-10 w-10"
+          >
+            {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onSkip}
+            disabled={!currentSong && playlist.length === 0}
+            className="h-10 w-10"
+          >
+            <SkipForward className="h-5 w-5" />
+          </Button>
+          <Volume2 className="h-5 w-5 text-muted-foreground ml-2" />
+        </div>
+
+        <div className="audio-info">
+          {currentSong ? (
+            <>
+              <p className="audio-title">{currentSong.title}</p>
+              <p className="audio-subtitle">Now Playing • {playlist.length} in queue</p>
+            </>
+          ) : (
+            <p className="audio-subtitle">No song playing</p>
           )}
         </div>
 
-        {currentSong && (
-          <div className="now-playing">
-            <h3 className="text-lg font-semibold">Now Playing</h3>
-            <p className="text-sm text-muted-foreground">{currentSong.title}</p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onSkip}
-              className="mt-2"
-            >
-              <SkipForward className="h-4 w-4 mr-2" />
-              Skip
-            </Button>
-          </div>
-        )}
-
-        {!currentSong && playlist.length === 0 && (
-          <div className="now-playing">
-            <p className="text-sm text-muted-foreground">
-              No songs playing. Add a YouTube URL below to get started! 🎵
-            </p>
-          </div>
-        )}
-      </div>
-
-      <div className="add-song-form">
-        <h3 className="text-lg font-semibold mb-2">Add Song</h3>
-        <div className="flex gap-2">
-          <Input
-            type="text"
-            placeholder="Paste YouTube URL..."
-            value={songUrl}
-            onChange={(e) => setSongUrl(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                handleAddSong();
-              }
-            }}
-            className="flex-1"
-          />
-          <Button onClick={handleAddSong} type="button">
-            <Plus className="h-4 w-4 mr-2" />
-            Add
+        <div className="audio-controls-right">
+          <Button
+            variant="default"
+            size="sm"
+            onClick={() => setShowAddForm(!showAddForm)}
+            className="gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            Add Song
           </Button>
         </div>
-      </div>
+      </Card>
 
-      <div className="playlist">
-        <h3 className="text-lg font-semibold mb-2">Queue ({playlist.length})</h3>
-        <div className="playlist-items">
-          {playlist.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No songs in queue</p>
-          ) : (
-            playlist.map((song) => (
-              <div key={song.id} className="playlist-item">
-                <div className="flex-1">
-                  <p className="text-sm font-medium">{song.title}</p>
-                  <p className="text-xs text-muted-foreground">Added by {song.added_by}</p>
+      {/* Add Song Form (Expandable) */}
+      {showAddForm && (
+        <Card className="add-song-expanded">
+          <div className="p-4 space-y-4">
+            <div>
+              <h3 className="text-sm font-semibold mb-2">Add Song to Queue</h3>
+              <div className="flex gap-2">
+                <Input
+                  type="text"
+                  placeholder="Paste YouTube URL..."
+                  value={songUrl}
+                  onChange={(e) => setSongUrl(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddSong();
+                    }
+                  }}
+                  className="flex-1"
+                  autoFocus
+                />
+                <Button onClick={handleAddSong} type="button">
+                  Add
+                </Button>
+              </div>
+            </div>
+
+            {/* Queue Preview */}
+            {playlist.length > 0 && (
+              <div>
+                <h4 className="text-xs font-semibold mb-2 text-muted-foreground">
+                  QUEUE ({playlist.length})
+                </h4>
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  {playlist.slice(0, 5).map((song) => (
+                    <div key={song.id} className="queue-item">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium truncate">{song.title}</p>
+                        <p className="text-xs text-muted-foreground">by {song.added_by}</p>
+                      </div>
+                    </div>
+                  ))}
+                  {playlist.length > 5 && (
+                    <p className="text-xs text-muted-foreground text-center pt-1">
+                      +{playlist.length - 5} more songs
+                    </p>
+                  )}
                 </div>
               </div>
-            ))
-          )}
-        </div>
-      </div>
+            )}
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

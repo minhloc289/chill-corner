@@ -224,41 +224,47 @@
   @apply absolute top-4 right-4 flex gap-2 z-20;
 }
 
-/* YouTube Player */
-.youtube-player-container {
-  @apply flex-shrink-0 p-4 bg-card border-t space-y-4 max-h-[400px] overflow-y-auto;
+/* Audio Player */
+.audio-player-container {
+  @apply absolute bottom-0 left-0 right-80 z-30 p-4 space-y-2;
 }
 
-.player-wrapper {
-  @apply space-y-2;
+.audio-control-bar {
+  @apply flex items-center gap-4 p-3 bg-card backdrop-blur-sm shadow-lg border;
+  background-color: hsl(var(--card) / 0.95);
 }
 
-.player-embed {
-  @apply w-full aspect-video bg-black rounded-lg overflow-hidden relative;
+.audio-controls-left {
+  @apply flex items-center gap-1;
 }
 
-.now-playing {
-  @apply p-3 bg-muted rounded-lg;
+.audio-info {
+  @apply flex-1 min-w-0 px-2;
 }
 
-.add-song-form {
-  @apply space-y-2;
+.audio-title {
+  @apply text-sm font-semibold truncate;
 }
 
-.playlist {
-  @apply space-y-2;
+.audio-subtitle {
+  @apply text-xs text-muted-foreground;
 }
 
-.playlist-items {
-  @apply space-y-2 max-h-40 overflow-y-auto;
+.audio-controls-right {
+  @apply flex items-center gap-2;
 }
 
-.playlist-item {
-  @apply flex items-center gap-3 p-2 bg-muted rounded-lg transition cursor-pointer;
+.add-song-expanded {
+  @apply bg-card backdrop-blur-sm shadow-lg border;
+  background-color: hsl(var(--card) / 0.95);
 }
 
-.playlist-item:hover {
-  opacity: 0.8;
+.queue-item {
+  @apply flex items-center gap-2 p-2 rounded transition;
+}
+
+.queue-item:hover {
+  background-color: hsl(var(--accent) / 0.5);
 }
 
 /* Chat Sidebar */
