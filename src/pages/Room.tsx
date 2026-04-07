@@ -272,10 +272,18 @@ export default function Room() {
   const handleSceneChange = async (scenePreset: string) => {
     if (!roomId) return;
 
-    await supabase
+    console.log('Changing scene to:', scenePreset);
+
+    const { error } = await supabase
       .from('rooms')
       .update({ scene_preset: scenePreset, updated_at: new Date().toISOString() })
       .eq('id', roomId);
+
+    if (error) {
+      console.error('Error changing scene:', error);
+    } else {
+      console.log('Scene changed successfully');
+    }
   };
 
   const handleAddSong = async (url: string, title: string) => {

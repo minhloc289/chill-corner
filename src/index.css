@@ -140,7 +140,7 @@
 }
 
 .room-main {
-  @apply flex-1 flex flex-col overflow-hidden;
+  @apply flex-1 flex flex-col overflow-hidden relative;
 }
 
 /* Room Scene */
@@ -255,7 +255,7 @@
 }
 
 .add-song-expanded {
-  @apply bg-card backdrop-blur-sm shadow-lg border;
+  @apply bg-card backdrop-blur-sm shadow-lg border rounded-lg;
   background-color: hsl(var(--card) / 0.95);
 }
 
