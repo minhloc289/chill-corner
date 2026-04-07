@@ -15,6 +15,11 @@ const scenePresets = [
 export function RoomScene({ scenePreset, onSceneChange }: RoomSceneProps) {
   const currentScene = scenePresets.find((s) => s.id === scenePreset) || scenePresets[0];
 
+  const handleSceneClick = (presetId: string) => {
+    console.log('Button clicked, changing to:', presetId);
+    onSceneChange(presetId);
+  };
+
   return (
     <div className="room-scene">
       {/* Background Image/GIF */}
@@ -32,7 +37,7 @@ export function RoomScene({ scenePreset, onSceneChange }: RoomSceneProps) {
             key={preset.id}
             variant={scenePreset === preset.id ? 'default' : 'outline'}
             size="icon"
-            onClick={() => onSceneChange(preset.id)}
+            onClick={() => handleSceneClick(preset.id)}
             className="h-10 w-10 font-semibold"
           >
             {preset.number}

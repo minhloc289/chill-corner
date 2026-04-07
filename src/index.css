@@ -221,12 +221,15 @@
 
 /* Scene Controls */
 .scene-controls {
-  @apply absolute top-4 right-4 flex gap-2 z-20;
+  @apply absolute top-4 right-4 flex gap-2;
+  z-index: 40;
+  pointer-events: auto;
 }
 
 /* Audio Player */
 .audio-player-container {
-  @apply absolute bottom-0 left-0 right-80 z-30 p-4 space-y-2;
+  @apply absolute bottom-0 left-0 right-80 p-4 space-y-2;
+  z-index: 50;
 }
 
 .audio-control-bar {
