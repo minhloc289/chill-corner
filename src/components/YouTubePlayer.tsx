@@ -31,14 +31,16 @@ declare global {
 
 export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip }: YouTubePlayerProps) {
   const playerRef = useRef<any>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const playerContainerId = useRef(`youtube-player-${Math.random().toString(36).substr(2, 9)}`);
   const [songUrl, setSongUrl] = useState('');
   const [isReady, setIsReady] = useState(false);
+  const [apiReady, setApiReady] = useState(false);
 
   // Extract YouTube video ID from URL
   const getVideoId = (url: string): string | null => {
     const patterns = [
       /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+      /youtube\.com\/shorts\/([^&\n?#]+)/,
     ];
 
     for (const pattern of patterns) {
@@ -50,62 +52,111 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip }: YouT
 
   // Load YouTube IFrame API
   useEffect(() => {
-    if (!window.YT) {
-      const tag = document.createElement('script');
-      tag.src = 'https://www.youtube.com/iframe_api';
-      const firstScriptTag = document.getElementsByTagName('script')[0];
-      firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
-
-      window.onYouTubeIframeAPIReady = () => {
-        initPlayer();
-      };
-    } else {
-      initPlayer();
+    // Check if API is already loaded
+    if (window.YT && window.YT.Player) {
+      setApiReady(true);
+      return;
     }
+
+    // Check if script is already being loaded
+    const existingScript = document.querySelector('script[src="https://www.youtube.com/iframe_api"]');
+    if (existingScript) {
+      // Wait for it to load
+      window.onYouTubeIframeAPIReady = () => {
+        setApiReady(true);
+      };
+      return;
+    }
+
+    // Load the script
+    const tag = document.createElement('script');
+    tag.src = 'https://www.youtube.com/iframe_api';
+    tag.async = true;
+    const firstScriptTag = document.getElementsByTagName('script')[0];
+    firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
+
+    window.onYouTubeIframeAPIReady = () => {
+      setApiReady(true);
+    };
   }, []);
 
-  const initPlayer = () => {
-    if (!containerRef.current || playerRef.current) return;
+  // Initialize player when API is ready
+  useEffect(() => {
+    if (!apiReady || playerRef.current) return;
 
-    playerRef.current = new window.YT.Player(containerRef.current, {
-      height: '315',
-      width: '560',
-      videoId: '',
-      playerVars: {
-        autoplay: 0,
-        controls: 1,
-        modestbranding: 1,
-        rel: 0,
-      },
-      events: {
-        onReady: () => setIsReady(true),
-        onStateChange: (event: any) => {
-          // When video ends, skip to next
-          if (event.data === window.YT.PlayerState.ENDED) {
-            onSkip();
-          }
-        },
-      },
-    });
-  };
+    const initPlayer = () => {
+      try {
+        playerRef.current = new window.YT.Player(playerContainerId.current, {
+          height: '100%',
+          width: '100%',
+          videoId: '',
+          playerVars: {
+            autoplay: 1,
+            controls: 1,
+            modestbranding: 1,
+            rel: 0,
+            origin: window.location.origin,
+          },
+          events: {
+            onReady: (event: any) => {
+              console.log('YouTube player ready');
+              setIsReady(true);
+            },
+            onStateChange: (event: any) => {
+              // When video ends, skip to next
+              if (event.data === window.YT.PlayerState.ENDED) {
+                onSkip();
+              }
+            },
+            onError: (event: any) => {
+              console.error('YouTube player error:', event.data);
+            },
+          },
+        });
+      } catch (error) {
+        console.error('Error initializing YouTube player:', error);
+      }
+    };
+
+    // Small delay to ensure DOM is ready
+    setTimeout(initPlayer, 100);
+
+    return () => {
+      if (playerRef.current && typeof playerRef.current.destroy === 'function') {
+        playerRef.current.destroy();
+        playerRef.current = null;
+      }
+    };
+  }, [apiReady]);
 
   // Sync player with current song
   useEffect(() => {
-    if (!isReady || !playerRef.current || !currentSong) return;
+    if (!isReady || !playerRef.current || !currentSong) {
+      return;
+    }
 
     const videoId = getVideoId(currentSong.url);
-    if (!videoId) return;
+    if (!videoId) {
+      console.error('Invalid video ID for URL:', currentSong.url);
+      return;
+    }
 
-    // Calculate elapsed time since song started
-    const startedAt = new Date(currentSong.startedAt).getTime();
-    const now = Date.now();
-    const elapsedSeconds = Math.max(0, (now - startedAt) / 1000);
+    try {
+      // Calculate elapsed time since song started
+      const startedAt = new Date(currentSong.startedAt).getTime();
+      const now = Date.now();
+      const elapsedSeconds = Math.max(0, (now - startedAt) / 1000);
 
-    // Load video and seek to correct position
-    playerRef.current.loadVideoById({
-      videoId,
-      startSeconds: elapsedSeconds,
-    });
+      console.log('Loading video:', videoId, 'at', elapsedSeconds, 'seconds');
+
+      // Load video and seek to correct position
+      playerRef.current.loadVideoById({
+        videoId,
+        startSeconds: elapsedSeconds,
+      });
+    } catch (error) {
+      console.error('Error loading video:', error);
+    }
   }, [currentSong, isReady]);
 
   const handleAddSong = async () => {
@@ -113,7 +164,7 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip }: YouT
 
     const videoId = getVideoId(songUrl);
     if (!videoId) {
-      alert('Invalid YouTube URL');
+      alert('Invalid YouTube URL. Please paste a valid YouTube video URL.');
       return;
     }
 
@@ -137,7 +188,14 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip }: YouT
   return (
     <div className="youtube-player-container">
       <div className="player-wrapper">
-        <div ref={containerRef} className="player-embed" />
+        <div className="player-embed">
+          <div id={playerContainerId.current} style={{ width: '100%', height: '100%' }} />
+          {!apiReady && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black text-white">
+              Loading YouTube player...
+            </div>
+          )}
+        </div>
 
         {currentSong && (
           <div className="now-playing">
@@ -152,6 +210,14 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip }: YouT
               <SkipForward className="h-4 w-4 mr-2" />
               Skip
             </Button>
+          </div>
+        )}
+
+        {!currentSong && playlist.length === 0 && (
+          <div className="now-playing">
+            <p className="text-sm text-muted-foreground">
+              No songs playing. Add a YouTube URL below to get started! 🎵
+            </p>
           </div>
         )}
       </div>

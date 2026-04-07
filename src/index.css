@@ -341,7 +341,7 @@
 }
 
 .player-embed {
-  @apply w-full aspect-video bg-black rounded-lg overflow-hidden;
+  @apply w-full aspect-video bg-black rounded-lg overflow-hidden relative;
 }
 
 .now-playing {

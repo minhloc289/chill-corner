@@ -285,9 +285,26 @@ export default function Room() {
       return;
     }
 
-    // If no song is currently playing, start this one
+    // If no song is currently playing, start this one immediately
     if (!room?.current_song_url) {
-      await handleSkip();
+      // Update room with the new song
+      await supabase
+        .from('rooms')
+        .update({
+          current_song_url: url,
+          current_song_title: title,
+          current_song_started_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', roomId);
+
+      // Remove from playlist (it's now playing)
+      await supabase
+        .from('playlist')
+        .delete()
+        .eq('room_id', roomId)
+        .eq('url', url)
+        .eq('position', nextPosition);
     }
   };
 
