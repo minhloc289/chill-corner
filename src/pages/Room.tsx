@@ -119,21 +119,30 @@ export default function Room() {
         ]);
 
         // Subscribe to realtime updates
-        subscribeToRoom(currentRoomId);
+        const unsubscribe = subscribeToRoom(currentRoomId);
 
         setLoading(false);
+
+        // Return cleanup function
+        return unsubscribe;
       } catch (error) {
         console.error('Error initializing room:', error);
         setLoading(false);
       }
     };
 
-    initRoom();
+    const cleanup = initRoom();
 
     // Cleanup on unmount
     return () => {
       if (roomId) {
         handleLeaveRoom();
+      }
+      // Cleanup realtime subscription
+      if (cleanup && typeof cleanup.then === 'function') {
+        cleanup.then((fn) => fn && fn());
+      } else if (typeof cleanup === 'function') {
+        cleanup();
       }
     };
   }, [roomId, navigate]);
@@ -207,19 +216,21 @@ export default function Room() {
 
   const subscribeToRoom = (roomIdParam: string) => {
     // Subscribe to room changes
-    supabase
+    const channel = supabase
       .channel(`room:${roomIdParam}`)
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${roomIdParam}` },
         (payload) => {
+          console.log('Room updated:', payload.new);
           setRoom(payload.new as Room);
         }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'playlist', filter: `room_id=eq.${roomIdParam}` },
-        () => {
+        (payload) => {
+          console.log('Playlist changed:', payload);
           loadPlaylist(roomIdParam);
         }
       )
@@ -227,17 +238,32 @@ export default function Room() {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${roomIdParam}` },
         (payload) => {
+          console.log('New message:', payload.new);
           setMessages((prev) => [...prev, payload.new as Message].slice(-50));
         }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'room_members', filter: `room_id=eq.${roomIdParam}` },
-        () => {
+        (payload) => {
+          console.log('Room members changed:', payload);
           loadMembers(roomIdParam);
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Realtime subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('Successfully subscribed to room updates');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('Failed to subscribe to room updates');
+        }
+      });
+
+    // Return cleanup function
+    return () => {
+      console.log('Unsubscribing from room');
+      supabase.removeChannel(channel);
+    };
   };
 
   const handleLeaveRoom = async () => {
