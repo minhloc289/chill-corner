@@ -376,25 +376,21 @@ export default function Room() {
   const handleAddSong = useCallback(async (url: string, title: string) => {
     if (!roomId) return;
 
-    const nextPosition = playlist.length > 0 ? Math.max(...playlist.map((s) => s.position)) + 1 : 0;
-
-    const { error } = await supabase.from('playlist').insert({
-      room_id: roomId,
-      url,
-      title,
-      added_by: username,
-      position: nextPosition,
-    });
-
-    if (error) {
-      console.error('Error adding song:', error);
-      return;
-    }
-
-    // If no song is currently playing, start this one immediately
+    // Check if there's a current song playing
     if (!room?.current_song_url) {
-      // Update room with the new song
-      await supabase
+      // NO SONG PLAYING - Start immediately (don't add to queue)
+      console.log('No song playing, starting immediately:', title);
+
+      // OPTIMISTIC: Update local state
+      setRoom((prev) => prev ? {
+        ...prev,
+        current_song_url: url,
+        current_song_title: title,
+        current_song_started_at: new Date().toISOString(),
+      } : prev);
+
+      // Update database
+      const { error } = await supabase
         .from('rooms')
         .update({
           current_song_url: url,
@@ -404,13 +400,50 @@ export default function Room() {
         })
         .eq('id', roomId);
 
-      // Remove from playlist (it's now playing)
-      await supabase
+      if (error) {
+        console.error('Error starting song:', error);
+      }
+    } else {
+      // SONG PLAYING - Add to queue
+      console.log('Song playing, adding to queue:', title);
+
+      const nextPosition = playlist.length > 0
+        ? Math.max(...playlist.map((s) => s.position)) + 1
+        : 0;
+
+      // OPTIMISTIC: Add to local playlist immediately
+      const tempSong = {
+        id: `temp-${Date.now()}`,
+        url,
+        title,
+        added_by: username,
+        position: nextPosition,
+        room_id: roomId,
+      };
+      setPlaylist((prev) => [...prev, tempSong]);
+
+      // Insert to database
+      const { data, error } = await supabase
         .from('playlist')
-        .delete()
-        .eq('room_id', roomId)
-        .eq('url', url)
-        .eq('position', nextPosition);
+        .insert({
+          room_id: roomId,
+          url,
+          title,
+          added_by: username,
+          position: nextPosition,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error adding song to queue:', error);
+        // Remove temp song on error
+        setPlaylist((prev) => prev.filter((s) => s.id !== tempSong.id));
+        return;
+      }
+
+      // Replace temp with real data
+      setPlaylist((prev) => prev.map((s) => (s.id === tempSong.id ? data : s)));
     }
   }, [roomId, playlist, username, room?.current_song_url]);
 
@@ -421,8 +454,19 @@ export default function Room() {
     const nextSong = playlist[0];
 
     if (nextSong) {
-      // Update room with new song
-      await supabase
+      console.log('Skipping to next song:', nextSong.title);
+
+      // OPTIMISTIC: Update local state immediately
+      setPlaylist((prev) => prev.slice(1)); // Remove first song
+      setRoom((prev) => prev ? {
+        ...prev,
+        current_song_url: nextSong.url,
+        current_song_title: nextSong.title,
+        current_song_started_at: new Date().toISOString(),
+      } : prev);
+
+      // Update room in database
+      const { error: roomError } = await supabase
         .from('rooms')
         .update({
           current_song_url: nextSong.url,
@@ -432,10 +476,36 @@ export default function Room() {
         })
         .eq('id', roomId);
 
-      // Remove from playlist
-      await supabase.from('playlist').delete().eq('id', nextSong.id);
+      if (roomError) {
+        console.error('Error updating room:', roomError);
+        // Reload from database on error
+        await loadPlaylist(roomId);
+        return;
+      }
+
+      // Remove from playlist in database
+      const { error: deleteError } = await supabase
+        .from('playlist')
+        .delete()
+        .eq('id', nextSong.id);
+
+      if (deleteError) {
+        console.error('Error deleting song from playlist:', deleteError);
+        // Reload playlist to sync state
+        await loadPlaylist(roomId);
+      }
     } else {
-      // No more songs, clear current song
+      console.log('No more songs in queue, clearing current song');
+
+      // OPTIMISTIC: Clear current song locally
+      setRoom((prev) => prev ? {
+        ...prev,
+        current_song_url: null,
+        current_song_title: null,
+        current_song_started_at: null,
+      } : prev);
+
+      // Clear in database
       await supabase
         .from('rooms')
         .update({
@@ -447,6 +517,28 @@ export default function Room() {
         .eq('id', roomId);
     }
   }, [roomId, playlist]);
+
+  const handleRemoveSong = useCallback(async (songId: string) => {
+    if (!roomId) return;
+
+    console.log('Removing song from queue:', songId);
+
+    // OPTIMISTIC: Remove from local state immediately
+    setPlaylist((prev) => prev.filter((s) => s.id !== songId));
+
+    // Delete from database
+    const { error } = await supabase
+      .from('playlist')
+      .delete()
+      .eq('id', songId)
+      .eq('room_id', roomId); // Safety: only delete from this room
+
+    if (error) {
+      console.error('Error removing song:', error);
+      // Reload playlist on error to sync state
+      await loadPlaylist(roomId);
+    }
+  }, [roomId]);
 
   const handleSendMessage = useCallback(async (message: string) => {
     if (!roomId) return;
@@ -513,6 +605,7 @@ export default function Room() {
           playlist={playlist}
           onAddSong={handleAddSong}
           onSkip={handleSkip}
+          onRemoveSong={handleRemoveSong}
         />
       </div>
       <ChatSidebar

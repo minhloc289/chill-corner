@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { Plus, SkipForward, Play, Pause, Volume2 } from 'lucide-react';
+import { Plus, SkipForward, Play, Pause, Volume2, X } from 'lucide-react';
 import { Card } from './ui/card';
 
 interface Song {
@@ -21,6 +21,7 @@ interface YouTubePlayerProps {
   playlist: Song[];
   onAddSong: (url: string, title: string) => void;
   onSkip: () => void;
+  onRemoveSong?: (songId: string) => void;
 }
 
 declare global {
@@ -30,7 +31,7 @@ declare global {
   }
 }
 
-export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip }: YouTubePlayerProps) {
+export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemoveSong }: YouTubePlayerProps) {
   const playerRef = useRef<any>(null);
   const playerContainerId = useRef(`youtube-player-${Math.random().toString(36).substr(2, 9)}`);
   const [songUrl, setSongUrl] = useState('');
@@ -39,6 +40,7 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip }: YouT
   const [isPlaying, setIsPlaying] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
+  const [lastStartedAt, setLastStartedAt] = useState<number>(0);
   const syncIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Extract YouTube video ID from URL
@@ -120,6 +122,13 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip }: YouT
             },
             onError: (event: any) => {
               console.error('YouTube player error:', event.data);
+              // Error codes: 2=Invalid ID, 5=HTML5 error, 100=Not found, 101/150=Embed disabled
+              console.log('Auto-skipping to next song due to playback error...');
+
+              // Auto-skip to next song after 2 seconds
+              setTimeout(() => {
+                onSkip();
+              }, 2000);
             },
           },
         });
@@ -161,15 +170,19 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip }: YouT
       return;
     }
 
-    // OPTIMIZATION: Only reload if video actually changed
-    if (currentVideoId === videoId) {
-      console.log('Video already loaded, skipping reload to prevent stuttering');
+    // OPTIMIZATION: Only reload if video AND timestamp haven't changed
+    const currentStartedAt = new Date(currentSong.startedAt).getTime();
+    const isSameSong = currentVideoId === videoId &&
+                       Math.abs(currentStartedAt - lastStartedAt) < 1000;
+
+    if (isSameSong) {
+      console.log('Same song and timestamp, skipping reload to prevent stuttering');
       return;
     }
 
     try {
       // Calculate elapsed time since song started
-      const startedAt = new Date(currentSong.startedAt).getTime();
+      const startedAt = currentStartedAt;
       const now = Date.now();
       const elapsedSeconds = Math.max(0, (now - startedAt) / 1000);
 
@@ -188,11 +201,13 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip }: YouT
         }
       }, 500);
 
+      // Update tracking to prevent unnecessary reloads
       setCurrentVideoId(videoId);
+      setLastStartedAt(startedAt);
     } catch (error) {
       console.error('Error loading video:', error);
     }
-  }, [currentSong, isReady, currentVideoId]);
+  }, [currentSong, isReady, currentVideoId, lastStartedAt]);
 
   // Periodic sync check to keep playback aligned
   useEffect(() => {
@@ -368,11 +383,21 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip }: YouT
                 </h4>
                 <div className="space-y-1 max-h-32 overflow-y-auto">
                   {playlist.slice(0, 5).map((song) => (
-                    <div key={song.id} className="queue-item">
+                    <div key={song.id} className="queue-item" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium truncate" style={{ color: 'white' }}>{song.title}</p>
                         <p className="text-xs" style={{ color: 'rgba(255,255,255,0.7)' }}>by {song.added_by}</p>
                       </div>
+                      {onRemoveSong && (
+                        <button
+                          onClick={() => onRemoveSong(song.id)}
+                          className="flex-shrink-0 hover:bg-red-600/20 rounded p-1 transition-colors"
+                          style={{ color: 'rgba(255, 100, 100, 0.8)' }}
+                          title="Remove from queue"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
                     </div>
                   ))}
                   {playlist.length > 5 && (
