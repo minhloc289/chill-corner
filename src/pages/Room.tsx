@@ -9,6 +9,7 @@ import { getUserId, getUsername, saveUsername, generateRoomId } from '@/lib/room
 interface Room {
   id: string;
   weather: 'sun' | 'rain' | 'night';
+  scene_preset: string;
   current_song_url: string | null;
   current_song_title: string | null;
   current_song_started_at: string | null;
@@ -267,6 +268,15 @@ export default function Room() {
       .eq('id', roomId);
   };
 
+  const handleSceneChange = async (scenePreset: string) => {
+    if (!roomId) return;
+
+    await supabase
+      .from('rooms')
+      .update({ scene_preset: scenePreset, updated_at: new Date().toISOString() })
+      .eq('id', roomId);
+  };
+
   const handleAddSong = async (url: string, title: string) => {
     if (!roomId) return;
 
@@ -390,7 +400,9 @@ export default function Room() {
       <div className="room-main">
         <RoomScene
           weather={room?.weather || 'sun'}
+          scenePreset={room?.scene_preset || 'lofi-night'}
           onWeatherChange={handleWeatherChange}
+          onSceneChange={handleSceneChange}
         />
         <YouTubePlayer
           currentSong={
