@@ -48,6 +48,7 @@ export default function Room() {
   const [members, setMembers] = useState<RoomMember[]>([]);
   const [loading, setLoading] = useState(true);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const subscriptionRef = useRef<any>(null);
 
   // Initialize or join room
   useEffect(() => {
@@ -246,6 +247,13 @@ export default function Room() {
   }, []);
 
   const subscribeToRoom = (roomIdParam: string) => {
+    // Prevent multiple subscriptions
+    if (subscriptionRef.current) {
+      console.log('Subscription already exists, cleaning up old one');
+      supabase.removeChannel(subscriptionRef.current);
+      subscriptionRef.current = null;
+    }
+
     // Subscribe to room changes
     const channel = supabase
       .channel(`room:${roomIdParam}`)
@@ -270,7 +278,15 @@ export default function Room() {
         { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${roomIdParam}` },
         (payload) => {
           console.log('New message:', payload.new);
-          setMessages((prev) => [...prev, payload.new as Message].slice(-50));
+          const newMessage = payload.new as Message;
+          setMessages((prev) => {
+            // Prevent duplicates by checking if message ID already exists
+            if (prev.some(msg => msg.id === newMessage.id)) {
+              console.log('Duplicate message prevented:', newMessage.id);
+              return prev;
+            }
+            return [...prev, newMessage].slice(-50);
+          });
         }
       )
       .on(
@@ -290,10 +306,14 @@ export default function Room() {
         }
       });
 
+    // Store subscription reference
+    subscriptionRef.current = channel;
+
     // Return cleanup function
     return () => {
       console.log('Unsubscribing from room');
       supabase.removeChannel(channel);
+      subscriptionRef.current = null;
     };
   };
 
