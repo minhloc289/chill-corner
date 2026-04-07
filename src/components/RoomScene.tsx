@@ -1,6 +1,5 @@
-import { WeatherOverlay } from './WeatherOverlay';
 import { Button } from './ui/button';
-import { Cloud, Sun, Moon, Image as ImageIcon } from 'lucide-react';
+import { Image as ImageIcon } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,9 +8,7 @@ import {
 } from './ui/dropdown-menu';
 
 interface RoomSceneProps {
-  weather: 'sun' | 'rain' | 'night';
   scenePreset: string;
-  onWeatherChange: (weather: 'sun' | 'rain' | 'night') => void;
   onSceneChange: (preset: string) => void;
 }
 
@@ -22,13 +19,11 @@ const scenePresets = [
   { id: 'beach-sunset', name: 'Beach Sunset', image: '/room-beach-sunset.jpg' },
 ];
 
-export function RoomScene({ weather, scenePreset, onWeatherChange, onSceneChange }: RoomSceneProps) {
+export function RoomScene({ scenePreset, onSceneChange }: RoomSceneProps) {
   const currentScene = scenePresets.find((s) => s.id === scenePreset) || scenePresets[0];
 
   return (
     <div className="room-scene">
-      <WeatherOverlay weather={weather} />
-
       {/* Background Image */}
       <div
         className="room-background"
@@ -59,34 +54,6 @@ export function RoomScene({ weather, scenePreset, onWeatherChange, onSceneChange
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-
-        {/* Weather controls */}
-        <div className="flex gap-2">
-          <Button
-            variant={weather === 'sun' ? 'default' : 'outline'}
-            size="icon"
-            onClick={() => onWeatherChange('sun')}
-            title="Sunny"
-          >
-            <Sun className="h-4 w-4" />
-          </Button>
-          <Button
-            variant={weather === 'rain' ? 'default' : 'outline'}
-            size="icon"
-            onClick={() => onWeatherChange('rain')}
-            title="Rainy"
-          >
-            <Cloud className="h-4 w-4" />
-          </Button>
-          <Button
-            variant={weather === 'night' ? 'default' : 'outline'}
-            size="icon"
-            onClick={() => onWeatherChange('night')}
-            title="Night"
-          >
-            <Moon className="h-4 w-4" />
-          </Button>
-        </div>
       </div>
     </div>
   );

@@ -399,9 +399,7 @@ export default function Room() {
     <div className="room-page">
       <div className="room-main">
         <RoomScene
-          weather={room?.weather || 'sun'}
           scenePreset={room?.scene_preset || 'lofi-night'}
-          onWeatherChange={handleWeatherChange}
           onSceneChange={handleSceneChange}
         />
         <YouTubePlayer
