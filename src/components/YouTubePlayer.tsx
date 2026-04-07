@@ -39,6 +39,7 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip }: YouT
   const [isPlaying, setIsPlaying] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
+  const syncIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Extract YouTube video ID from URL
   const getVideoId = (url: string): string | null => {
@@ -144,6 +145,12 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip }: YouT
       // Clear current video if no song
       if (!currentSong && currentVideoId) {
         setCurrentVideoId(null);
+        // Stop playback
+        try {
+          playerRef.current?.stopVideo();
+        } catch (e) {
+          console.error('Error stopping video:', e);
+        }
       }
       return;
     }
@@ -166,18 +173,71 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip }: YouT
       const now = Date.now();
       const elapsedSeconds = Math.max(0, (now - startedAt) / 1000);
 
-      console.log('Loading video:', videoId, 'at', elapsedSeconds, 'seconds');
+      console.log('Loading video:', videoId, 'at', elapsedSeconds, 'seconds (AUTOPLAY)');
 
-      // Load video and seek to correct position
+      // Load video and seek to correct position with autoplay
       playerRef.current.loadVideoById({
         videoId,
         startSeconds: elapsedSeconds,
       });
 
+      // Ensure video starts playing after load
+      setTimeout(() => {
+        if (playerRef.current) {
+          playerRef.current.playVideo();
+        }
+      }, 500);
+
       setCurrentVideoId(videoId);
     } catch (error) {
       console.error('Error loading video:', error);
     }
+  }, [currentSong, isReady, currentVideoId]);
+
+  // Periodic sync check to keep playback aligned
+  useEffect(() => {
+    // Clear any existing interval
+    if (syncIntervalRef.current) {
+      clearInterval(syncIntervalRef.current);
+    }
+
+    // Only sync if we have a song and player is ready
+    if (!currentSong || !isReady || !playerRef.current || !currentVideoId) {
+      return;
+    }
+
+    // Check sync every 5 seconds
+    syncIntervalRef.current = setInterval(() => {
+      if (!playerRef.current || !currentSong) return;
+
+      try {
+        const currentTime = playerRef.current.getCurrentTime();
+        const startedAt = new Date(currentSong.startedAt).getTime();
+        const now = Date.now();
+        const expectedTime = (now - startedAt) / 1000;
+        const drift = Math.abs(currentTime - expectedTime);
+
+        // If drift is more than 3 seconds, resync
+        if (drift > 3) {
+          console.log(`Playback drift detected: ${drift.toFixed(2)}s - Resyncing...`);
+          playerRef.current.seekTo(expectedTime, true);
+
+          // Ensure it's playing
+          const state = playerRef.current.getPlayerState();
+          if (state !== window.YT.PlayerState.PLAYING) {
+            playerRef.current.playVideo();
+          }
+        }
+      } catch (error) {
+        console.error('Error in sync check:', error);
+      }
+    }, 5000);
+
+    return () => {
+      if (syncIntervalRef.current) {
+        clearInterval(syncIntervalRef.current);
+      }
+    };
   }, [currentSong, isReady, currentVideoId]);
 
   const handleAddSong = async () => {
