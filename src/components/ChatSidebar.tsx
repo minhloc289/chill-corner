@@ -71,8 +71,8 @@ export function ChatSidebar({
     <div className="chat-sidebar">
       {/* Members section */}
       <div className="members-section">
-        <div className="members-header">
-          <Users className="h-4 w-4" />
+        <div className="members-header" style={{ color: '#1a1a1a' }}>
+          <Users className="h-4 w-4" style={{ color: '#1a1a1a' }} />
           <span className="font-semibold">
             {members.length} {members.length === 1 ? 'Person' : 'People'} here
           </span>
@@ -84,8 +84,11 @@ export function ChatSidebar({
               className={`member-item ${
                 member.username === currentUsername ? 'member-item-self' : ''
               }`}
+              style={{ color: '#1a1a1a' }}
             >
-              <div className="member-avatar">{member.username[0].toUpperCase()}</div>
+              <div className="member-avatar" style={{ backgroundColor: '#3b82f6', color: 'white' }}>
+                {member.username[0].toUpperCase()}
+              </div>
               {member.username === currentUsername && !isEditingName ? (
                 <button
                   className="member-name member-name-editable"
@@ -93,9 +96,10 @@ export function ChatSidebar({
                     setIsEditingName(true);
                     setNewName(currentUsername);
                   }}
+                  style={{ color: '#1a1a1a' }}
                 >
                   {member.username}
-                  <span className="text-xs ml-1">(you)</span>
+                  <span className="text-xs ml-1" style={{ color: '#666' }}>(you)</span>
                 </button>
               ) : member.username === currentUsername && isEditingName ? (
                 <Input
@@ -110,10 +114,11 @@ export function ChatSidebar({
                     }
                   }}
                   className="member-name-input"
+                  style={{ color: '#1a1a1a' }}
                   autoFocus
                 />
               ) : (
-                <span className="member-name">{member.username}</span>
+                <span className="member-name" style={{ color: '#1a1a1a' }}>{member.username}</span>
               )}
             </div>
           ))}
@@ -134,13 +139,13 @@ export function ChatSidebar({
                 {msg.message_type === 'chat' ? (
                   <>
                     <div className="message-header">
-                      <span className="message-username">{msg.username}</span>
-                      <span className="message-time">{formatTime(msg.created_at)}</span>
+                      <span className="message-username" style={{ color: '#1a1a1a' }}>{msg.username}</span>
+                      <span className="message-time" style={{ color: '#666' }}>{formatTime(msg.created_at)}</span>
                     </div>
-                    <div className="message-text">{msg.message}</div>
+                    <div className="message-text" style={{ color: '#1a1a1a' }}>{msg.message}</div>
                   </>
                 ) : (
-                  <div className="message-text-system">{msg.message}</div>
+                  <div className="message-text-system" style={{ color: '#666' }}>{msg.message}</div>
                 )}
               </div>
             ))}
@@ -164,8 +169,9 @@ export function ChatSidebar({
               }
             }}
             className="flex-1"
+            style={{ color: '#1a1a1a', backgroundColor: 'white', borderColor: '#e5e7eb' }}
           />
-          <Button onClick={handleSendMessage} size="icon" type="button">
+          <Button onClick={handleSendMessage} size="icon" type="button" style={{ backgroundColor: '#3b82f6', color: 'white' }}>
             <Send className="h-4 w-4" />
           </Button>
         </div>
