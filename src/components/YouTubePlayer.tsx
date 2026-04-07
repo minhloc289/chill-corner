@@ -53,6 +53,16 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
   const [isPlayingDefault, setIsPlayingDefault] = useState(false);
   const [currentDefaultIndex, setCurrentDefaultIndex] = useState(0);
   const defaultMusicStartedAt = useRef<number>(0);
+  const isPlayingDefaultRef = useRef(false);
+  const currentDefaultIndexRef = useRef(0);
+  const onSkipRef = useRef(onSkip);
+
+  // Keep refs in sync with state for event handlers
+  useEffect(() => {
+    isPlayingDefaultRef.current = isPlayingDefault;
+    currentDefaultIndexRef.current = currentDefaultIndex;
+    onSkipRef.current = onSkip;
+  }, [isPlayingDefault, currentDefaultIndex, onSkip]);
 
   // Extract YouTube video ID from URL
   const getVideoId = (url: string): string | null => {
@@ -128,13 +138,16 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
                 setIsPlaying(false);
               } else if (event.data === window.YT.PlayerState.ENDED) {
                 setIsPlaying(false);
+                console.log('Song ended. isPlayingDefault:', isPlayingDefaultRef.current);
                 // If playing default music, move to next default track
-                if (isPlayingDefault) {
-                  const nextIndex = (currentDefaultIndex + 1) % DEFAULT_MUSIC.length;
+                if (isPlayingDefaultRef.current) {
+                  const nextIndex = (currentDefaultIndexRef.current + 1) % DEFAULT_MUSIC.length;
+                  console.log('Moving to next default track:', nextIndex);
                   setCurrentDefaultIndex(nextIndex);
                 } else {
-                  // User song ended, skip to next
-                  onSkip();
+                  // User song ended, skip to next in queue
+                  console.log('User song ended, calling onSkip...');
+                  onSkipRef.current();
                 }
               }
             },
@@ -145,12 +158,14 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
 
               // Auto-skip to next song after 2 seconds
               setTimeout(() => {
-                if (isPlayingDefault) {
+                if (isPlayingDefaultRef.current) {
                   // Try next default track
-                  const nextIndex = (currentDefaultIndex + 1) % DEFAULT_MUSIC.length;
+                  const nextIndex = (currentDefaultIndexRef.current + 1) % DEFAULT_MUSIC.length;
+                  console.log('Error - moving to next default track:', nextIndex);
                   setCurrentDefaultIndex(nextIndex);
                 } else {
-                  onSkip();
+                  console.log('Error - skipping to next user song');
+                  onSkipRef.current();
                 }
               }, 2000);
             },
