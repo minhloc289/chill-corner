@@ -66,14 +66,20 @@ const Index = () => {
                 placeholder="Enter room ID..."
                 value={roomId}
                 onChange={(e) => setRoomId(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleJoinRoom()}
-                className="h-14 text-lg"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleJoinRoom();
+                  }
+                }}
+                className="h-14 text-lg flex-1"
               />
               <Button
                 onClick={handleJoinRoom}
                 size="lg"
                 variant="outline"
                 className="h-14 px-8"
+                type="button"
               >
                 Join
               </Button>

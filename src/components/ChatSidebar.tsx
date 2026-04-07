@@ -103,7 +103,12 @@ export function ChatSidebar({
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   onBlur={handleRename}
-                  onKeyPress={(e) => e.key === 'Enter' && handleRename()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleRename();
+                    }
+                  }}
                   className="member-name-input"
                   autoFocus
                 />
@@ -152,9 +157,15 @@ export function ChatSidebar({
             placeholder="Type a message..."
             value={messageText}
             onChange={(e) => setMessageText(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleSendMessage();
+              }
+            }}
+            className="flex-1"
           />
-          <Button onClick={handleSendMessage} size="icon">
+          <Button onClick={handleSendMessage} size="icon" type="button">
             <Send className="h-4 w-4" />
           </Button>
         </div>

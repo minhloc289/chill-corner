@@ -164,9 +164,15 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip }: YouT
             placeholder="Paste YouTube URL..."
             value={songUrl}
             onChange={(e) => setSongUrl(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleAddSong()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleAddSong();
+              }
+            }}
+            className="flex-1"
           />
-          <Button onClick={handleAddSong}>
+          <Button onClick={handleAddSong} type="button">
             <Plus className="h-4 w-4 mr-2" />
             Add
           </Button>
