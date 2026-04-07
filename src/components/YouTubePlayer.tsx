@@ -219,8 +219,9 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip }: YouT
             onClick={togglePlayPause}
             disabled={!currentSong}
             className="h-10 w-10"
+            style={{ color: 'white' }}
           >
-            {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+            {isPlaying ? <Pause className="h-5 w-5" style={{ color: 'white' }} /> : <Play className="h-5 w-5" style={{ color: 'white' }} />}
           </Button>
           <Button
             variant="ghost"
@@ -228,20 +229,21 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip }: YouT
             onClick={onSkip}
             disabled={!currentSong && playlist.length === 0}
             className="h-10 w-10"
+            style={{ color: 'white' }}
           >
-            <SkipForward className="h-5 w-5" />
+            <SkipForward className="h-5 w-5" style={{ color: 'white' }} />
           </Button>
-          <Volume2 className="h-5 w-5 text-muted-foreground ml-2" />
+          <Volume2 className="h-5 w-5 ml-2" style={{ color: 'white' }} />
         </div>
 
         <div className="audio-info">
           {currentSong ? (
             <>
-              <p className="audio-title">{currentSong.title}</p>
-              <p className="audio-subtitle">Now Playing • {playlist.length} in queue</p>
+              <p className="audio-title" style={{ color: 'white' }}>{currentSong.title}</p>
+              <p className="audio-subtitle" style={{ color: 'white' }}>Now Playing • {playlist.length} in queue</p>
             </>
           ) : (
-            <p className="audio-subtitle">No song playing</p>
+            <p className="audio-subtitle" style={{ color: 'white' }}>No song playing</p>
           )}
         </div>
 
@@ -261,9 +263,9 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip }: YouT
       {/* Add Song Form (Expandable) */}
       {showAddForm && (
         <Card className="add-song-expanded">
-          <div className="p-4 space-y-4">
+          <div className="p-4 space-y-4" style={{ color: 'white' }}>
             <div>
-              <h3 className="text-sm font-semibold mb-2">Add Song to Queue</h3>
+              <h3 className="text-sm font-semibold mb-2" style={{ color: 'white' }}>Add Song to Queue</h3>
               <div className="flex gap-2">
                 <Input
                   type="text"
@@ -288,20 +290,20 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip }: YouT
             {/* Queue Preview */}
             {playlist.length > 0 && (
               <div>
-                <h4 className="text-xs font-semibold mb-2 text-muted-foreground">
+                <h4 className="text-xs font-semibold mb-2" style={{ color: 'white' }}>
                   QUEUE ({playlist.length})
                 </h4>
                 <div className="space-y-1 max-h-32 overflow-y-auto">
                   {playlist.slice(0, 5).map((song) => (
                     <div key={song.id} className="queue-item">
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium truncate">{song.title}</p>
-                        <p className="text-xs text-muted-foreground">by {song.added_by}</p>
+                        <p className="text-xs font-medium truncate" style={{ color: 'white' }}>{song.title}</p>
+                        <p className="text-xs" style={{ color: 'rgba(255,255,255,0.7)' }}>by {song.added_by}</p>
                       </div>
                     </div>
                   ))}
                   {playlist.length > 5 && (
-                    <p className="text-xs text-muted-foreground text-center pt-1">
+                    <p className="text-xs text-center pt-1" style={{ color: 'rgba(255,255,255,0.7)' }}>
                       +{playlist.length - 5} more songs
                     </p>
                   )}
