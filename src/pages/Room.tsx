@@ -79,6 +79,7 @@ export default function Room() {
             .insert({
               id: currentRoomId,
               weather: 'sun',
+              scene_preset: 'scene-1',
             })
             .select()
             .single();
@@ -399,7 +400,7 @@ export default function Room() {
     <div className="room-page">
       <div className="room-main">
         <RoomScene
-          scenePreset={room?.scene_preset || 'lofi-night'}
+          scenePreset={room?.scene_preset || 'scene-1'}
           onSceneChange={handleSceneChange}
         />
         <YouTubePlayer

@@ -1,11 +1,4 @@
 import { Button } from './ui/button';
-import { Image as ImageIcon } from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from './ui/dropdown-menu';
 
 interface RoomSceneProps {
   scenePreset: string;
@@ -13,10 +6,10 @@ interface RoomSceneProps {
 }
 
 const scenePresets = [
-  { id: 'lofi-night', name: 'Lofi Night', image: '/room-lofi-night.jpg' },
-  { id: 'sunny-day', name: 'Sunny Study', image: '/room-sunny-day.jpg' },
-  { id: 'cafe-rain', name: 'Rainy Cafe', image: '/room-cafe-rain.jpg' },
-  { id: 'beach-sunset', name: 'Beach Sunset', image: '/room-beach-sunset.jpg' },
+  { id: 'scene-1', number: 1, image: '/scene-1.gif' },
+  { id: 'scene-2', number: 2, image: '/scene-2.jpg' },
+  { id: 'scene-3', number: 3, image: '/scene-3.gif' },
+  { id: 'scene-4', number: 4, image: '/scene-4.gif' },
 ];
 
 export function RoomScene({ scenePreset, onSceneChange }: RoomSceneProps) {
@@ -24,7 +17,7 @@ export function RoomScene({ scenePreset, onSceneChange }: RoomSceneProps) {
 
   return (
     <div className="room-scene">
-      {/* Background Image */}
+      {/* Background Image/GIF */}
       <div
         className="room-background"
         style={{
@@ -32,28 +25,19 @@ export function RoomScene({ scenePreset, onSceneChange }: RoomSceneProps) {
         }}
       />
 
-      {/* Controls */}
+      {/* Scene Number Buttons */}
       <div className="scene-controls">
-        {/* Scene Preset Selector */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-2">
-              <ImageIcon className="h-4 w-4" />
-              {currentScene.name}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {scenePresets.map((preset) => (
-              <DropdownMenuItem
-                key={preset.id}
-                onClick={() => onSceneChange(preset.id)}
-                className={scenePreset === preset.id ? 'bg-accent' : ''}
-              >
-                {preset.name}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {scenePresets.map((preset) => (
+          <Button
+            key={preset.id}
+            variant={scenePreset === preset.id ? 'default' : 'outline'}
+            size="icon"
+            onClick={() => onSceneChange(preset.id)}
+            className="h-10 w-10 font-semibold"
+          >
+            {preset.number}
+          </Button>
+        ))}
       </div>
     </div>
   );
