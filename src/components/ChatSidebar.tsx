@@ -168,8 +168,7 @@ export function ChatSidebar({
                 handleSendMessage();
               }
             }}
-            className="flex-1"
-            style={{ color: '#1a1a1a', backgroundColor: 'white', borderColor: '#e5e7eb' }}
+            className="flex-1 chat-input-field"
           />
           <Button onClick={handleSendMessage} size="icon" type="button" style={{ backgroundColor: '#3b82f6', color: 'white' }}>
             <Send className="h-4 w-4" />

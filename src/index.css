@@ -389,3 +389,13 @@
 .chat-input-section {
   @apply flex-shrink-0 p-4 border-t border-sidebar-border;
 }
+
+.chat-input-field {
+  color: hsl(var(--foreground));
+  background-color: hsl(var(--background));
+  border-color: hsl(var(--border));
+}
+
+.chat-input-field::placeholder {
+  color: hsl(var(--muted-foreground));
+}
