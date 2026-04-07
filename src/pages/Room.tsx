@@ -91,7 +91,17 @@ export default function Room() {
           setRoom(existingRoom);
         }
 
-        // Join room as member
+        // Check if member already exists (to avoid duplicate join messages)
+        const { data: existingMember } = await supabase
+          .from('room_members')
+          .select('*')
+          .eq('room_id', currentRoomId)
+          .eq('user_id', userId)
+          .single();
+
+        const isNewMember = !existingMember;
+
+        // Join room as member (upsert to handle page refreshes)
         const { error: memberError } = await supabase
           .from('room_members')
           .upsert({
@@ -99,18 +109,23 @@ export default function Room() {
             user_id: userId,
             username,
             last_seen: new Date().toISOString(),
+          }, {
+            onConflict: 'room_id,user_id',
+            ignoreDuplicates: false,
           });
 
         if (memberError) throw memberError;
 
-        // Add system message for join
-        await supabase.from('messages').insert({
-          room_id: currentRoomId,
-          user_id: userId,
-          username,
-          message: `${username} joined the room`,
-          message_type: 'system',
-        });
+        // Add system message for join only if it's a new member
+        if (isNewMember) {
+          await supabase.from('messages').insert({
+            room_id: currentRoomId,
+            user_id: userId,
+            username,
+            message: `${username} joined the room`,
+            message_type: 'system',
+          });
+        }
 
         // Load initial data
         await Promise.all([
