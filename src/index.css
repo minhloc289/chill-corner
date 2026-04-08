@@ -403,22 +403,22 @@
 .volume-slider button[role="slider"] {
   background-color: white !important;
   border: none !important;
-  width: 0px !important;
-  height: 0px !important;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+  width: 14px !important;
+  height: 14px !important;
+  box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.1), 0 4px 12px rgba(0, 0, 0, 0.4);
   transition: all 0.2s ease;
-  opacity: 0;
-}
-
-.volume-slider:hover button[role="slider"] {
-  width: 12px !important;
-  height: 12px !important;
   opacity: 1;
 }
 
-.volume-slider button[role="slider"]:hover {
-  transform: scale(1.15);
-  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.4);
+.volume-slider:hover button[role="slider"] {
+  box-shadow: 0 0 0 6px rgba(0, 0, 0, 0.15), 0 4px 16px rgba(0, 0, 0, 0.5);
+  transform: scale(1.1);
+}
+
+.volume-slider button[role="slider"]:hover,
+.volume-slider button[role="slider"]:focus {
+  transform: scale(1.2);
+  box-shadow: 0 0 0 8px rgba(0, 0, 0, 0.2), 0 6px 20px rgba(0, 0, 0, 0.6);
 }
 
 /* Queue Preview Styles - Modern */
