@@ -17,6 +17,8 @@ const DEFAULT_MUSIC = [
 
 // Google Custom Search Engine ID
 const GOOGLE_SEARCH_ENGINE_ID = import.meta.env.VITE_GOOGLE_SEARCH_ENGINE_ID || '';
+console.log('🔍 Google Search Engine ID loaded:', GOOGLE_SEARCH_ENGINE_ID);
+console.log('🔍 All VITE env vars:', Object.keys(import.meta.env).filter(k => k.startsWith('VITE_')));
 
 interface Song {
   id: string;
