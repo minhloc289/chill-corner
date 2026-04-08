@@ -233,11 +233,11 @@
   z-index: 50;
 }
 
-.audio-control-bar {
-  @apply flex items-center gap-4 p-3 backdrop-blur-sm shadow-lg rounded-lg;
-  background-color: rgba(0, 0, 0, 0.95) !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  min-height: 60px;
+.audio-control-bar-enhanced {
+  @apply flex flex-col gap-0 p-4 backdrop-blur-md shadow-xl rounded-lg;
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.95) 0%, rgba(20, 20, 30, 0.95) 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  min-height: 80px;
 }
 
 .audio-controls-left {
@@ -246,6 +246,11 @@
 
 .audio-controls-left button {
   color: white !important;
+  transition: transform 0.2s ease;
+}
+
+.audio-controls-left button:hover:not(:disabled) {
+  transform: scale(1.1);
 }
 
 .audio-controls-left .lucide {
@@ -266,10 +271,6 @@
   color: white !important;
 }
 
-.audio-control-bar .lucide {
-  color: white !important;
-}
-
 .audio-controls-right {
   @apply flex items-center gap-2;
 }
@@ -279,9 +280,9 @@
 }
 
 .add-song-expanded {
-  @apply backdrop-blur-sm shadow-lg rounded-lg;
-  background-color: rgba(0, 0, 0, 0.95) !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  @apply backdrop-blur-md shadow-xl rounded-lg;
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.95) 0%, rgba(20, 20, 30, 0.95) 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
   color: white !important;
 }
 
@@ -291,16 +292,114 @@
   color: white !important;
 }
 
-.queue-item {
-  @apply flex items-center gap-2 p-2 rounded transition;
+/* Progress Bar Styles */
+.progress-bar-container {
+  @apply relative w-full h-2 rounded-full;
+  padding: 4px 0;
 }
 
-.queue-item p {
-  color: white !important;
+.progress-bar-track {
+  @apply relative w-full h-1 bg-white/20 rounded-full overflow-hidden;
+  transition: height 0.2s ease;
 }
 
-.queue-item:hover {
-  background-color: hsl(var(--accent) / 0.5);
+.progress-bar-container:hover .progress-bar-track {
+  height: 6px;
+}
+
+.progress-bar-filled {
+  @apply absolute top-0 left-0 h-full bg-white rounded-full transition-all;
+}
+
+.progress-bar-hover {
+  @apply absolute top-0 left-0 h-full bg-white/30 rounded-full pointer-events-none;
+}
+
+.progress-bar-thumb {
+  @apply absolute top-1/2 w-3 h-3 bg-white rounded-full shadow-lg opacity-0 transition-all;
+  transform: translate(-50%, -50%);
+}
+
+.progress-bar-container:hover .progress-bar-thumb {
+  opacity: 1;
+}
+
+.progress-bar-tooltip {
+  @apply absolute bottom-full mb-2 px-2 py-1 bg-black/90 text-white text-xs rounded opacity-0 transition-opacity pointer-events-none;
+  transform: translateX(-50%);
+}
+
+.progress-bar-container:hover .progress-bar-tooltip {
+  opacity: 1;
+}
+
+/* Volume Control Styles */
+.volume-slider-container {
+  @apply flex items-center gap-2 opacity-0 transition-opacity duration-200;
+  max-width: 0;
+  overflow: hidden;
+}
+
+.volume-slider-visible {
+  opacity: 1;
+  max-width: 200px;
+}
+
+/* Queue Preview Styles */
+.queue-preview-container {
+  @apply space-y-2;
+}
+
+.queue-preview-item {
+  @apply flex items-center gap-2 p-2 rounded-lg transition-colors;
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.queue-preview-item:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.queue-preview-number {
+  @apply text-xs font-semibold text-white/50 w-5 text-center;
+}
+
+.queue-preview-thumbnail {
+  @apply w-10 h-10 rounded overflow-hidden flex-shrink-0 bg-black/30;
+}
+
+.queue-preview-remove {
+  @apply flex-shrink-0 p-1.5 rounded-full hover:bg-red-500/20 transition-all;
+  color: rgba(255, 100, 100, 0.8);
+}
+
+.queue-preview-remove:hover {
+  color: rgba(255, 100, 100, 1);
+}
+
+/* Suggestion Chips */
+.suggestion-chip {
+  @apply px-3 py-1.5 text-xs font-medium rounded-full transition-all;
+  background-color: rgba(255, 255, 255, 0.1);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.suggestion-chip:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Browse Playlist Items */
+.browse-playlist-item {
+  @apply w-full flex items-center gap-3 p-2 rounded-lg transition-all;
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.browse-playlist-item:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+  transform: translateX(4px);
 }
 
 /* Chat Sidebar */

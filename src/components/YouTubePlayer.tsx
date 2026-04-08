@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from './ui/button';
-import { Plus, SkipForward, Play, Pause, Volume2, X } from 'lucide-react';
+import { SkipForward, Play, Pause, ChevronDown, ChevronUp } from 'lucide-react';
 import { Card } from './ui/card';
 import { YouTubeSearchTab } from './YouTubeSearchTab';
+import { VolumeControl } from './VolumeControl';
+import { ProgressBar } from './ProgressBar';
+import { QueuePreview } from './QueuePreview';
 
 // Default ambient music for when queue is empty
 // Using shorter, confirmed-working videos instead of live streams for better reliability
@@ -383,124 +386,146 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
     }
   };
 
+  const getThumbnail = (url: string): string => {
+    const videoId = getVideoId(url);
+    if (videoId) {
+      return `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+    }
+    return '';
+  };
+
+  const currentThumbnail = currentSong
+    ? getThumbnail(currentSong.url)
+    : isPlayingDefault
+    ? getThumbnail(DEFAULT_MUSIC[currentDefaultIndex].url)
+    : '';
+
   return (
     <div className="audio-player-container">
       {/* Hidden YouTube player */}
       <div id={playerContainerId.current} style={{ position: 'absolute', left: '-9999px' }} />
 
-      {/* Compact Audio Control Bar */}
-      <Card className="audio-control-bar">
-        <div className="audio-controls-left">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={togglePlayPause}
-            disabled={!currentSong && !isPlayingDefault}
-            className="h-10 w-10"
-            style={{ color: 'white' }}
-          >
-            {isPlaying ? <Pause className="h-5 w-5" style={{ color: 'white' }} /> : <Play className="h-5 w-5" style={{ color: 'white' }} />}
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => {
-              if (isPlayingDefault) {
-                // Skip to next default track
-                const nextIndex = (currentDefaultIndex + 1) % DEFAULT_MUSIC.length;
-                setCurrentDefaultIndex(nextIndex);
-              } else {
-                onSkip();
-              }
-            }}
-            disabled={!currentSong && !isPlayingDefault && playlist.length === 0}
-            className="h-10 w-10"
-            style={{ color: 'white' }}
-          >
-            <SkipForward className="h-5 w-5" style={{ color: 'white' }} />
-          </Button>
-          <Volume2 className="h-5 w-5 ml-2" style={{ color: 'white' }} />
+      {/* Enhanced Audio Control Bar */}
+      <Card className="audio-control-bar-enhanced">
+        {/* Top row: Controls + Info + Expand button */}
+        <div className="flex items-center gap-4 w-full">
+          {/* Left: Playback controls */}
+          <div className="audio-controls-left">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={togglePlayPause}
+              disabled={!currentSong && !isPlayingDefault}
+              className="h-10 w-10"
+            >
+              {isPlaying ? (
+                <Pause className="h-5 w-5 text-white" />
+              ) : (
+                <Play className="h-5 w-5 text-white" />
+              )}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                if (isPlayingDefault) {
+                  const nextIndex = (currentDefaultIndex + 1) % DEFAULT_MUSIC.length;
+                  setCurrentDefaultIndex(nextIndex);
+                } else {
+                  onSkip();
+                }
+              }}
+              disabled={!currentSong && !isPlayingDefault && playlist.length === 0}
+              className="h-10 w-10"
+            >
+              <SkipForward className="h-5 w-5 text-white" />
+            </Button>
+          </div>
+
+          {/* Center: Thumbnail + Song info */}
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            {/* Thumbnail */}
+            {currentThumbnail && (
+              <div className="w-12 h-12 rounded overflow-hidden flex-shrink-0 bg-black/30">
+                <img
+                  src={currentThumbnail}
+                  alt="Song thumbnail"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            )}
+
+            {/* Song info */}
+            <div className="audio-info flex-1 min-w-0">
+              {currentSong ? (
+                <>
+                  <p className="audio-title text-white">{currentSong.title}</p>
+                  <p className="audio-subtitle text-white/70">
+                    Now Playing • {playlist.length} in queue
+                  </p>
+                </>
+              ) : isPlayingDefault ? (
+                <>
+                  <p className="audio-title text-white">
+                    {DEFAULT_MUSIC[currentDefaultIndex].title}
+                  </p>
+                  <p className="audio-subtitle text-white/60">
+                    🎵 Ambient Music • Add songs to start your queue
+                  </p>
+                </>
+              ) : (
+                <p className="audio-subtitle text-white/70">No song playing</p>
+              )}
+            </div>
+          </div>
+
+          {/* Right: Volume + Expand button */}
+          <div className="flex items-center gap-2">
+            <VolumeControl playerRef={playerRef} isReady={isReady} />
+
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowAddForm(!showAddForm)}
+              className="h-8 w-8"
+              title={showAddForm ? 'Collapse' : 'Add songs'}
+            >
+              {showAddForm ? (
+                <ChevronDown className="h-4 w-4 text-white" />
+              ) : (
+                <ChevronUp className="h-4 w-4 text-white" />
+              )}
+            </Button>
+          </div>
         </div>
 
-        <div className="audio-info">
-          {currentSong ? (
-            <>
-              <p className="audio-title" style={{ color: 'white' }}>{currentSong.title}</p>
-              <p className="audio-subtitle" style={{ color: 'white' }}>Now Playing • {playlist.length} in queue</p>
-            </>
-          ) : isPlayingDefault ? (
-            <>
-              <p className="audio-title" style={{ color: 'white' }}>{DEFAULT_MUSIC[currentDefaultIndex].title}</p>
-              <p className="audio-subtitle" style={{ color: 'rgba(255,255,255,0.7)' }}>🎵 Ambient Music • Add songs to start your queue</p>
-            </>
-          ) : (
-            <p className="audio-subtitle" style={{ color: 'white' }}>No song playing</p>
-          )}
-        </div>
-
-        <div className="audio-controls-right">
-          <Button
-            variant="default"
-            size="sm"
-            onClick={() => setShowAddForm(!showAddForm)}
-            className="gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            Add Song
-          </Button>
+        {/* Bottom row: Progress bar */}
+        <div className="w-full mt-2">
+          <ProgressBar playerRef={playerRef} isReady={isReady} isPlaying={isPlaying} />
         </div>
       </Card>
 
       {/* Add Song Form (Expandable) */}
       {showAddForm && (
         <Card className="add-song-expanded">
-          <div className="p-4 space-y-4" style={{ color: 'white' }}>
-            <h3 className="text-sm font-semibold mb-2" style={{ color: 'white' }}>
-              Add Song to Queue
-            </h3>
+          <div className="p-4 space-y-4">
+            <h3 className="text-sm font-semibold mb-2 text-white">Add Song to Queue</h3>
 
-            {/* Search/Add Song Interface - No Tabs */}
+            {/* Tabbed Search Interface */}
             <YouTubeSearchTab
               onVideoSelect={(url, title) => {
-                console.log('🎵 Video selected from search:', title);
+                console.log('🎵 Video selected:', title);
                 onAddSong(url, title);
-                setShowAddForm(false);
               }}
             />
 
-            {/* Queue Preview */}
+            {/* Divider */}
             {playlist.length > 0 && (
-              <div>
-                <h4 className="text-xs font-semibold mb-2" style={{ color: 'white' }}>
-                  QUEUE ({playlist.length})
-                </h4>
-                <div className="space-y-1 max-h-32 overflow-y-auto">
-                  {playlist.slice(0, 5).map((song) => (
-                    <div key={song.id} className="queue-item" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium truncate" style={{ color: 'white' }}>{song.title}</p>
-                        <p className="text-xs" style={{ color: 'rgba(255,255,255,0.7)' }}>by {song.added_by}</p>
-                      </div>
-                      {onRemoveSong && (
-                        <button
-                          onClick={() => onRemoveSong(song.id)}
-                          className="flex-shrink-0 hover:bg-red-600/20 rounded p-1 transition-colors"
-                          style={{ color: 'rgba(255, 100, 100, 0.8)' }}
-                          title="Remove from queue"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  {playlist.length > 5 && (
-                    <p className="text-xs text-center pt-1" style={{ color: 'rgba(255,255,255,0.7)' }}>
-                      +{playlist.length - 5} more songs
-                    </p>
-                  )}
-                </div>
-              </div>
+              <div className="border-t border-white/10 my-4" />
             )}
+
+            {/* Queue Preview - Always visible when there are songs */}
+            <QueuePreview playlist={playlist} onRemoveSong={onRemoveSong} maxVisible={4} />
           </div>
         </Card>
       )}
