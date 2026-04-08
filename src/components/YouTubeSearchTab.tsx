@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
-import { Search, Clipboard } from 'lucide-react';
+import { Search, Clipboard, ExternalLink } from 'lucide-react';
 
 interface YouTubeSearchTabProps {
   onVideoSelect: (url: string, title: string) => void;
@@ -9,15 +9,14 @@ interface YouTubeSearchTabProps {
 
 export function YouTubeSearchTab({ onVideoSelect }: YouTubeSearchTabProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchUrl, setSearchUrl] = useState('');
   const [pasteUrl, setPasteUrl] = useState('');
 
   const handleSearch = () => {
     if (!searchQuery.trim()) return;
 
-    // Generate YouTube search URL
+    // Open YouTube search in a new tab
     const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(searchQuery)}`;
-    setSearchUrl(url);
+    window.open(url, '_blank');
   };
 
   const handlePasteFromClipboard = async () => {
@@ -27,6 +26,8 @@ export function YouTubeSearchTab({ onVideoSelect }: YouTubeSearchTabProps) {
         setPasteUrl(text);
         // Auto-add the song
         handleAddFromPaste(text);
+      } else {
+        alert('No YouTube URL found in clipboard');
       }
     } catch (err) {
       console.error('Failed to read clipboard:', err);
@@ -76,7 +77,7 @@ export function YouTubeSearchTab({ onVideoSelect }: YouTubeSearchTabProps) {
 
   return (
     <div className="space-y-3">
-      {/* Search Input */}
+      {/* Search Input - Opens YouTube in new tab */}
       <div className="flex gap-2">
         <Input
           type="text"
@@ -94,7 +95,7 @@ export function YouTubeSearchTab({ onVideoSelect }: YouTubeSearchTabProps) {
         />
         <Button onClick={handleSearch} type="button" className="gap-2">
           <Search className="h-4 w-4" />
-          Search
+          <ExternalLink className="h-3 w-3" />
         </Button>
       </div>
 
@@ -102,7 +103,7 @@ export function YouTubeSearchTab({ onVideoSelect }: YouTubeSearchTabProps) {
       <div className="flex gap-2">
         <Input
           type="text"
-          placeholder="Or paste YouTube URL here..."
+          placeholder="Paste YouTube URL here..."
           value={pasteUrl}
           onChange={(e) => setPasteUrl(e.target.value)}
           onKeyDown={(e) => {
@@ -118,43 +119,31 @@ export function YouTubeSearchTab({ onVideoSelect }: YouTubeSearchTabProps) {
           type="button"
           variant="outline"
           className="gap-2"
-          title="Paste from clipboard"
+          title="Paste from clipboard and add to queue"
         >
           <Clipboard className="h-4 w-4" />
+          Paste & Add
         </Button>
       </div>
 
-      {/* Embedded Google Search Results */}
-      {searchUrl && (
-        <div className="bg-slate-900 rounded-lg overflow-hidden border border-slate-700">
-          <div className="p-2 bg-slate-800 border-b border-slate-700 flex items-center justify-between">
-            <p className="text-xs font-medium" style={{ color: 'rgba(255,255,255,0.8)' }}>
-              🎵 Click any result → Copy URL → Paste above
-            </p>
-            <Button
-              onClick={() => setSearchUrl('')}
-              variant="ghost"
-              size="sm"
-              className="h-6 text-xs"
-            >
-              Close
-            </Button>
-          </div>
-          <iframe
-            src={searchUrl}
-            className="w-full"
-            style={{ height: '400px', border: 'none' }}
-            title="YouTube Search Results"
-            sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-          />
+      {/* Instructions */}
+      <div className="bg-slate-800/50 rounded-lg p-3 space-y-2">
+        <div className="text-xs space-y-1.5" style={{ color: 'rgba(255,255,255,0.85)' }}>
+          <p className="font-semibold flex items-center gap-1.5">
+            <Search className="h-3.5 w-3.5" />
+            How to add songs:
+          </p>
+          <ol className="list-decimal list-inside space-y-1 opacity-90 ml-1">
+            <li>Type a song name and click Search (opens YouTube)</li>
+            <li>Find the video you want and copy its URL</li>
+            <li>Come back here and paste it, or click "Paste & Add"</li>
+          </ol>
         </div>
-      )}
+      </div>
 
-      {!searchUrl && (
-        <p className="text-xs opacity-60 text-center" style={{ color: 'white' }}>
-          💡 Search for music, click a result, copy the URL, and paste it above
-        </p>
-      )}
+      <p className="text-xs opacity-60 text-center" style={{ color: 'white' }}>
+        💡 Tip: The clipboard button auto-detects and adds YouTube URLs
+      </p>
     </div>
   );
 }
