@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { Plus, SkipForward, Play, Pause, Volume2, X } from 'lucide-react';
+import { Plus, SkipForward, Play, Pause, Volume2, X, Search, Link2 } from 'lucide-react';
 import { Card } from './ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { YouTubeSearchTab } from './YouTubeSearchTab';
 
 // Default ambient music for when queue is empty
 // Using shorter, confirmed-working videos instead of live streams for better reliability
@@ -12,6 +14,9 @@ const DEFAULT_MUSIC = [
   { url: 'https://www.youtube.com/watch?v=7NOSDKb0HlU', title: 'Calm Piano Music - Peaceful Ambiance' },
   { url: 'https://www.youtube.com/watch?v=36YnV9STBqc', title: 'Chillhop Essentials - Relaxing Beats' },
 ];
+
+// Google Custom Search Engine ID
+const GOOGLE_SEARCH_ENGINE_ID = import.meta.env.VITE_GOOGLE_SEARCH_ENGINE_ID || '';
 
 interface Song {
   id: string;
@@ -453,28 +458,74 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
       {showAddForm && (
         <Card className="add-song-expanded">
           <div className="p-4 space-y-4" style={{ color: 'white' }}>
-            <div>
-              <h3 className="text-sm font-semibold mb-2" style={{ color: 'white' }}>Add Song to Queue</h3>
-              <div className="flex gap-2">
-                <Input
-                  type="text"
-                  placeholder="Paste YouTube URL..."
-                  value={songUrl}
-                  onChange={(e) => setSongUrl(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleAddSong();
-                    }
-                  }}
-                  className="flex-1"
-                  autoFocus
-                />
-                <Button onClick={handleAddSong} type="button">
-                  Add
-                </Button>
-              </div>
-            </div>
+            <h3 className="text-sm font-semibold mb-2" style={{ color: 'white' }}>
+              Add Song to Queue
+            </h3>
+
+            <Tabs defaultValue="search" className="w-full">
+              <TabsList className="grid w-full grid-cols-2 bg-slate-800">
+                <TabsTrigger
+                  value="search"
+                  className="gap-2 data-[state=active]:bg-slate-700"
+                >
+                  <Search className="h-4 w-4" />
+                  Search YouTube
+                </TabsTrigger>
+                <TabsTrigger
+                  value="url"
+                  className="gap-2 data-[state=active]:bg-slate-700"
+                >
+                  <Link2 className="h-4 w-4" />
+                  Paste URL
+                </TabsTrigger>
+              </TabsList>
+
+              {/* Search Tab */}
+              <TabsContent value="search" className="mt-4">
+                {GOOGLE_SEARCH_ENGINE_ID ? (
+                  <YouTubeSearchTab
+                    searchEngineId={GOOGLE_SEARCH_ENGINE_ID}
+                    onVideoSelect={(url, title) => {
+                      console.log('🎵 Video selected from search:', title);
+                      onAddSong(url, title);
+                      setShowAddForm(false);
+                    }}
+                  />
+                ) : (
+                  <div className="text-center p-4">
+                    <p className="text-sm text-yellow-400 mb-2">
+                      ⚠️ Search not configured
+                    </p>
+                    <p className="text-xs opacity-70">
+                      Please add VITE_GOOGLE_SEARCH_ENGINE_ID to your .env.local file
+                    </p>
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* URL Paste Tab */}
+              <TabsContent value="url" className="mt-4">
+                <div className="flex gap-2">
+                  <Input
+                    type="text"
+                    placeholder="Paste YouTube URL..."
+                    value={songUrl}
+                    onChange={(e) => setSongUrl(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddSong();
+                      }
+                    }}
+                    className="flex-1"
+                    autoFocus
+                  />
+                  <Button onClick={handleAddSong} type="button">
+                    Add
+                  </Button>
+                </div>
+              </TabsContent>
+            </Tabs>
 
             {/* Queue Preview */}
             {playlist.length > 0 && (

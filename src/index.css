@@ -401,3 +401,122 @@
 .chat-input-field::placeholder {
   color: hsl(var(--muted-foreground));
 }
+
+/* ============================================
+   Google Custom Search Styling
+   ============================================ */
+
+.youtube-search-container {
+  min-height: 300px;
+}
+
+/* Search input styling */
+.youtube-search-container .gsc-input-box {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 6px !important;
+}
+
+.youtube-search-container input.gsc-input {
+  background-color: transparent !important;
+  color: white !important;
+  padding: 8px 12px !important;
+}
+
+.youtube-search-container input.gsc-input::placeholder {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+/* Search button */
+.youtube-search-container .gsc-search-button {
+  background-color: rgb(59, 130, 246) !important;
+  border: none !important;
+  border-radius: 6px !important;
+  padding: 8px 16px !important;
+}
+
+.youtube-search-container .gsc-search-button:hover {
+  background-color: rgb(37, 99, 235) !important;
+}
+
+/* Results container */
+.youtube-search-container .gsc-results-wrapper-visible {
+  max-height: 400px;
+  overflow-y: auto;
+  margin-top: 16px;
+}
+
+/* Individual result styling */
+.youtube-search-container .gsc-webResult {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 8px !important;
+  margin-bottom: 8px !important;
+  padding: 12px !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+}
+
+.youtube-search-container .gsc-webResult:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(59, 130, 246, 0.5) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Result title */
+.youtube-search-container .gs-title {
+  color: white !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+}
+
+/* Result snippet/description */
+.youtube-search-container .gs-snippet {
+  color: rgba(255, 255, 255, 0.7) !important;
+  font-size: 12px !important;
+  line-height: 1.4 !important;
+}
+
+/* Thumbnail styling */
+.youtube-search-container .gs-image {
+  border-radius: 6px !important;
+  overflow: hidden !important;
+}
+
+/* Remove Google branding styling (keep element, just style it) */
+.youtube-search-container .gsc-branding {
+  opacity: 0.5;
+  font-size: 10px;
+}
+
+/* Loading spinner */
+.youtube-search-container .gsc-loading-fade {
+  color: white !important;
+}
+
+/* No results message */
+.youtube-search-container .gs-no-results-result {
+  color: rgba(255, 255, 255, 0.7) !important;
+  text-align: center;
+  padding: 32px;
+}
+
+/* Scrollbar styling for results */
+.youtube-search-container .gsc-results-wrapper-visible::-webkit-scrollbar {
+  width: 8px;
+}
+
+.youtube-search-container .gsc-results-wrapper-visible::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+.youtube-search-container .gsc-results-wrapper-visible::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+.youtube-search-container .gsc-results-wrapper-visible::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
