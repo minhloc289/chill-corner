@@ -13,8 +13,8 @@ export function YouTubeSearchTab({ onVideoSelect }: YouTubeSearchTabProps) {
   const handleSearch = () => {
     if (!searchQuery.trim()) return;
 
-    // Open Google search for YouTube videos in a new window
-    const searchUrl = `https://www.google.com/search?q=site:youtube.com+${encodeURIComponent(searchQuery)}`;
+    // Open Google search for YouTube Music videos in a new window
+    const searchUrl = `https://www.google.com/search?q=site:music.youtube.com+${encodeURIComponent(searchQuery)}`;
     window.open(searchUrl, '_blank', 'width=800,height=600');
   };
 
@@ -23,7 +23,7 @@ export function YouTubeSearchTab({ onVideoSelect }: YouTubeSearchTabProps) {
       <div className="flex gap-2">
         <Input
           type="text"
-          placeholder="Search YouTube videos..."
+          placeholder="Search YouTube Music..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           onKeyDown={(e) => {
@@ -48,7 +48,7 @@ export function YouTubeSearchTab({ onVideoSelect }: YouTubeSearchTabProps) {
             <p className="font-medium mb-1">How to use:</p>
             <ol className="text-xs space-y-1 opacity-80 list-decimal list-inside">
               <li>Click "Search" to open Google in a new window</li>
-              <li>Find the YouTube video you want</li>
+              <li>Find the YouTube Music video you want</li>
               <li>Copy the video URL from the address bar</li>
               <li>Come back here and paste it in the "Paste URL" tab</li>
             </ol>
