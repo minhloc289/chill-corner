@@ -5,11 +5,12 @@ import { Plus, SkipForward, Play, Pause, Volume2, X } from 'lucide-react';
 import { Card } from './ui/card';
 
 // Default ambient music for when queue is empty
+// Using shorter, confirmed-working videos instead of live streams for better reliability
 const DEFAULT_MUSIC = [
-  { url: 'https://www.youtube.com/watch?v=jfKfPfyJRdk', title: 'lofi hip hop radio 📚 - beats to relax/study to' },
-  { url: 'https://www.youtube.com/watch?v=5qap5aO4i9A', title: 'lofi hip hop radio 🌊 - chill beats to study/relax' },
-  { url: 'https://www.youtube.com/watch?v=DWcJFNfaw9c', title: 'Relaxing Jazz Piano Radio - Slow Jazz Music' },
-  { url: 'https://www.youtube.com/watch?v=lTRiuFIWV54', title: 'Chillhop Radio - jazzy & lofi hip hop beats 🐾' },
+  { url: 'https://www.youtube.com/watch?v=1fueZCTYkpA', title: 'Lofi Beats - Study & Relax' },
+  { url: 'https://www.youtube.com/watch?v=BrnDlRmW5hs', title: 'Chill Lofi Mix - Coffee Shop Vibes' },
+  { url: 'https://www.youtube.com/watch?v=7NOSDKb0HlU', title: 'Calm Piano Music - Peaceful Ambiance' },
+  { url: 'https://www.youtube.com/watch?v=36YnV9STBqc', title: 'Chillhop Essentials - Relaxing Beats' },
 ];
 
 interface Song {
@@ -191,6 +192,8 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
   useEffect(() => {
     if (!isReady || !playerRef.current) return;
 
+    console.log('Player sync - currentSong:', currentSong, 'playlist.length:', playlist.length, 'isPlayingDefault:', isPlayingDefault);
+
     // CASE 1: User has a song playing
     if (currentSong) {
       const videoId = getVideoId(currentSong.url);
@@ -255,7 +258,8 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
 
       // Only start default if not already playing it
       if (!isPlayingDefault || currentVideoId !== videoId) {
-        console.log('Starting default music:', defaultTrack.title);
+        console.log('🎵 Starting default music:', defaultTrack.title);
+        console.log('📺 Video ID:', videoId);
         setIsPlayingDefault(true);
 
         try {
@@ -266,6 +270,7 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
 
           setTimeout(() => {
             if (playerRef.current) {
+              console.log('▶️ Attempting to play default music...');
               playerRef.current.playVideo();
             }
           }, 500);
@@ -273,7 +278,7 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
           setCurrentVideoId(videoId);
           defaultMusicStartedAt.current = Date.now();
         } catch (error) {
-          console.error('Error loading default music:', error);
+          console.error('❌ Error loading default music:', error);
         }
       }
     }
@@ -388,7 +393,7 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
             variant="ghost"
             size="icon"
             onClick={togglePlayPause}
-            disabled={!currentSong}
+            disabled={!currentSong && !isPlayingDefault}
             className="h-10 w-10"
             style={{ color: 'white' }}
           >
