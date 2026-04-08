@@ -15,8 +15,8 @@ export function YouTubeSearchTab({ onVideoSelect }: YouTubeSearchTabProps) {
   const handleSearch = () => {
     if (!searchQuery.trim()) return;
 
-    // Generate Google search URL for YouTube Music
-    const url = `https://www.google.com/search?igu=1&q=site:music.youtube.com+${encodeURIComponent(searchQuery)}`;
+    // Generate Google search URL for YouTube
+    const url = `https://www.google.com/search?igu=1&q=site:youtube.com+${encodeURIComponent(searchQuery)}`;
     setSearchUrl(url);
   };
 
@@ -80,7 +80,7 @@ export function YouTubeSearchTab({ onVideoSelect }: YouTubeSearchTabProps) {
       <div className="flex gap-2">
         <Input
           type="text"
-          placeholder="Search YouTube Music..."
+          placeholder="Search YouTube..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           onKeyDown={(e) => {
