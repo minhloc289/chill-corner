@@ -45,12 +45,12 @@ export function QueuePreview({ playlist, onRemoveSong, maxVisible = 4 }: QueuePr
 
   return (
     <div className="queue-preview-container">
-      <h4 className="text-xs font-semibold mb-3 text-white/90 flex items-center gap-2">
-        <span>UP NEXT</span>
-        <span className="text-white/50">• {playlist.length} songs</span>
+      <h4 className="text-sm font-semibold mb-3 text-white/90 flex items-center gap-2">
+        <span>Up Next</span>
+        <span className="text-white/40 font-normal text-xs">• {playlist.length} songs</span>
       </h4>
 
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         {visibleSongs.map((song, index) => {
           const thumbnail = getThumbnail(song.url);
 
@@ -73,8 +73,8 @@ export function QueuePreview({ playlist, onRemoveSong, maxVisible = 4 }: QueuePr
 
               {/* Song info */}
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-white truncate">{song.title}</p>
-                <p className="text-xs text-white/60 truncate">Added by {song.added_by}</p>
+                <p className="text-sm font-medium text-white truncate">{song.title}</p>
+                <p className="text-xs text-white/50 truncate">Added by {song.added_by}</p>
               </div>
 
               {/* Remove button */}
@@ -84,7 +84,7 @@ export function QueuePreview({ playlist, onRemoveSong, maxVisible = 4 }: QueuePr
                   className="queue-preview-remove opacity-0 group-hover:opacity-100 transition-opacity"
                   title="Remove from queue"
                 >
-                  <X className="h-3.5 w-3.5" />
+                  <X className="h-4 w-4" />
                 </button>
               )}
             </div>
@@ -92,7 +92,7 @@ export function QueuePreview({ playlist, onRemoveSong, maxVisible = 4 }: QueuePr
         })}
 
         {remainingCount > 0 && (
-          <p className="text-xs text-center text-white/50 pt-2">
+          <p className="text-xs text-center text-white/40 pt-2.5">
             +{remainingCount} more {remainingCount === 1 ? 'song' : 'songs'}
           </p>
         )}

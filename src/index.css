@@ -226,31 +226,55 @@
   pointer-events: auto;
 }
 
-/* Audio Player */
+/* Audio Player - Modern Design */
 .audio-player-container {
-  @apply fixed bottom-0 left-0 p-4 space-y-2;
+  @apply fixed bottom-0 left-0 p-3 space-y-2;
   right: 320px; /* Chat sidebar width */
   z-index: 50;
 }
 
 .audio-control-bar-enhanced {
-  @apply flex flex-col gap-0 p-4 backdrop-blur-md shadow-xl rounded-lg;
-  background: linear-gradient(135deg, rgba(0, 0, 0, 0.95) 0%, rgba(20, 20, 30, 0.95) 100%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
-  min-height: 80px;
+  @apply flex flex-col gap-3 p-5 backdrop-blur-xl shadow-2xl rounded-2xl;
+  background: rgba(18, 18, 18, 0.92) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  min-height: 90px;
 }
 
 .audio-controls-left {
-  @apply flex items-center gap-1;
+  @apply flex items-center gap-2;
 }
 
 .audio-controls-left button {
   color: white !important;
-  transition: transform 0.2s ease;
+  transition: all 0.2s ease;
+  border-radius: 50%;
 }
 
 .audio-controls-left button:hover:not(:disabled) {
-  transform: scale(1.1);
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  transform: scale(1.05);
+}
+
+.audio-controls-left button[aria-label*="Play"],
+.audio-controls-left button:has(svg.lucide-play),
+.audio-controls-left button:has(svg.lucide-pause) {
+  width: 40px !important;
+  height: 40px !important;
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  color: black !important;
+}
+
+.audio-controls-left button[aria-label*="Play"]:hover,
+.audio-controls-left button:has(svg.lucide-play):hover,
+.audio-controls-left button:has(svg.lucide-pause):hover {
+  background-color: white !important;
+  transform: scale(1.08);
+}
+
+.audio-controls-left button[aria-label*="Play"] svg,
+.audio-controls-left button:has(svg.lucide-play) svg,
+.audio-controls-left button:has(svg.lucide-pause) svg {
+  color: black !important;
 }
 
 .audio-controls-left .lucide {
@@ -258,31 +282,38 @@
 }
 
 .audio-info {
-  @apply flex-1 min-w-0 px-2;
+  @apply flex-1 min-w-0 px-3;
 }
 
 .audio-title {
-  @apply text-sm font-semibold truncate;
+  @apply text-base font-semibold truncate;
   color: white !important;
+  letter-spacing: -0.01em;
 }
 
 .audio-subtitle {
-  @apply text-xs;
-  color: white !important;
+  @apply text-sm;
+  color: rgba(255, 255, 255, 0.6) !important;
+  font-weight: 400;
 }
 
 .audio-controls-right {
-  @apply flex items-center gap-2;
+  @apply flex items-center gap-3;
 }
 
 .audio-controls-right button {
   color: white;
+  transition: all 0.2s ease;
+}
+
+.audio-controls-right button:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
 }
 
 .add-song-expanded {
-  @apply backdrop-blur-md shadow-xl rounded-lg;
-  background: linear-gradient(135deg, rgba(0, 0, 0, 0.95) 0%, rgba(20, 20, 30, 0.95) 100%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  @apply backdrop-blur-xl shadow-2xl rounded-2xl;
+  background: rgba(18, 18, 18, 0.92) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
   color: white !important;
 }
 
@@ -292,31 +323,39 @@
   color: white !important;
 }
 
-/* Progress Bar Styles */
+/* Progress Bar Styles - Modern */
 .progress-bar-container {
-  @apply relative w-full h-2 rounded-full;
-  padding: 4px 0;
+  @apply relative w-full rounded-full;
+  padding: 8px 0;
 }
 
 .progress-bar-track {
-  @apply relative w-full h-1 bg-white/20 rounded-full overflow-hidden;
-  transition: height 0.2s ease;
+  @apply relative w-full h-1 rounded-full overflow-hidden;
+  background-color: rgba(255, 255, 255, 0.15);
+  transition: all 0.2s ease;
 }
 
 .progress-bar-container:hover .progress-bar-track {
-  height: 6px;
+  height: 4px;
+  background-color: rgba(255, 255, 255, 0.25);
 }
 
 .progress-bar-filled {
-  @apply absolute top-0 left-0 h-full bg-white rounded-full transition-all;
+  @apply absolute top-0 left-0 h-full rounded-full;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 1) 100%);
+  transition: width 0.1s linear;
 }
 
 .progress-bar-hover {
-  @apply absolute top-0 left-0 h-full bg-white/30 rounded-full pointer-events-none;
+  @apply absolute top-0 left-0 h-full rounded-full pointer-events-none;
+  background-color: rgba(255, 255, 255, 0.3);
 }
 
 .progress-bar-thumb {
-  @apply absolute top-1/2 w-3 h-3 bg-white rounded-full shadow-lg opacity-0 transition-all;
+  @apply absolute top-1/2 rounded-full shadow-xl opacity-0 transition-all;
+  width: 12px;
+  height: 12px;
+  background-color: white;
   transform: translate(-50%, -50%);
 }
 
@@ -325,101 +364,125 @@
 }
 
 .progress-bar-tooltip {
-  @apply absolute bottom-full mb-2 px-2 py-1 bg-black/90 text-white text-xs rounded opacity-0 transition-opacity pointer-events-none;
+  @apply absolute bottom-full mb-3 px-2.5 py-1.5 text-white text-xs font-medium rounded-lg opacity-0 transition-opacity pointer-events-none;
+  background-color: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
   transform: translateX(-50%);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .progress-bar-container:hover .progress-bar-tooltip {
   opacity: 1;
 }
 
-/* Volume Control Styles */
+/* Volume Control Styles - Modern */
 .volume-slider {
-  height: 8px !important;
+  height: 6px !important;
 }
 
 /* Slider track (background) */
 .volume-slider > span[data-orientation="horizontal"] {
-  background-color: rgba(255, 255, 255, 0.4) !important;
-  height: 6px !important;
+  background-color: rgba(255, 255, 255, 0.2) !important;
+  height: 4px !important;
   border-radius: 999px;
+  transition: all 0.2s ease;
+}
+
+.volume-slider:hover > span[data-orientation="horizontal"] {
+  background-color: rgba(255, 255, 255, 0.3) !important;
 }
 
 /* Slider range (filled portion) */
 .volume-slider > span > span {
   background-color: white !important;
   height: 100%;
+  border-radius: 999px;
 }
 
 /* Slider thumb (draggable circle) */
 .volume-slider button[role="slider"] {
   background-color: white !important;
-  border: 2px solid white !important;
-  width: 14px !important;
-  height: 14px !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-  transition: transform 0.2s ease;
+  border: none !important;
+  width: 0px !important;
+  height: 0px !important;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s ease;
+  opacity: 0;
+}
+
+.volume-slider:hover button[role="slider"] {
+  width: 12px !important;
+  height: 12px !important;
+  opacity: 1;
 }
 
 .volume-slider button[role="slider"]:hover {
-  transform: scale(1.2);
+  transform: scale(1.15);
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.4);
 }
 
-/* Queue Preview Styles */
+/* Queue Preview Styles - Modern */
 .queue-preview-container {
-  @apply space-y-2;
+  @apply space-y-1.5;
 }
 
 .queue-preview-item {
-  @apply flex items-center gap-2 p-2 rounded-lg transition-colors;
-  background-color: rgba(255, 255, 255, 0.03);
+  @apply flex items-center gap-3 p-2.5 rounded-xl transition-all;
+  background-color: rgba(255, 255, 255, 0.02);
 }
 
 .queue-preview-item:hover {
-  background-color: rgba(255, 255, 255, 0.08);
+  background-color: rgba(255, 255, 255, 0.06);
+  transform: translateX(2px);
 }
 
 .queue-preview-number {
-  @apply text-xs font-semibold text-white/50 w-5 text-center;
+  @apply text-xs font-medium w-5 text-center;
+  color: rgba(255, 255, 255, 0.4);
 }
 
 .queue-preview-thumbnail {
-  @apply w-10 h-10 rounded overflow-hidden flex-shrink-0 bg-black/30;
+  @apply w-12 h-12 rounded-lg overflow-hidden flex-shrink-0;
+  background-color: rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .queue-preview-remove {
-  @apply flex-shrink-0 p-1.5 rounded-full hover:bg-red-500/20 transition-all;
-  color: rgba(255, 100, 100, 0.8);
+  @apply flex-shrink-0 p-1.5 rounded-full transition-all;
+  color: rgba(255, 255, 255, 0.4);
 }
 
 .queue-preview-remove:hover {
-  color: rgba(255, 100, 100, 1);
+  background-color: rgba(239, 68, 68, 0.15);
+  color: rgb(239, 68, 68);
+  transform: scale(1.1);
 }
 
-/* Suggestion Chips */
+/* Suggestion Chips - Modern */
 .suggestion-chip {
-  @apply px-3 py-1.5 text-xs font-medium rounded-full transition-all;
-  background-color: rgba(255, 255, 255, 0.1);
+  @apply px-4 py-2 text-xs font-medium rounded-full transition-all;
+  background-color: rgba(255, 255, 255, 0.08);
   color: white;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .suggestion-chip:hover {
-  background-color: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.3);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  background-color: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: scale(1.05);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
-/* Browse Playlist Items */
+/* Browse Playlist Items - Modern */
 .browse-playlist-item {
-  @apply w-full flex items-center gap-3 p-2 rounded-lg transition-all;
-  background-color: rgba(255, 255, 255, 0.03);
+  @apply w-full flex items-center gap-3 p-3 rounded-xl transition-all;
+  background-color: rgba(255, 255, 255, 0.02);
 }
 
 .browse-playlist-item:hover {
   background-color: rgba(255, 255, 255, 0.08);
-  transform: translateX(4px);
+  transform: translateX(2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
 }
 
 /* Chat Sidebar */

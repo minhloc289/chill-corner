@@ -443,10 +443,10 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
           </div>
 
           {/* Center: Thumbnail + Song info */}
-          <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="flex items-center gap-4 flex-1 min-w-0">
             {/* Thumbnail */}
             {currentThumbnail && (
-              <div className="w-12 h-12 rounded overflow-hidden flex-shrink-0 bg-black/30">
+              <div className="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 bg-black/40 shadow-lg">
                 <img
                   src={currentThumbnail}
                   alt="Song thumbnail"
@@ -460,7 +460,7 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
               {currentSong ? (
                 <>
                   <p className="audio-title text-white">{currentSong.title}</p>
-                  <p className="audio-subtitle text-white/70">
+                  <p className="audio-subtitle text-white/60">
                     Now Playing • {playlist.length} in queue
                   </p>
                 </>
@@ -469,12 +469,12 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
                   <p className="audio-title text-white">
                     {DEFAULT_MUSIC[currentDefaultIndex].title}
                   </p>
-                  <p className="audio-subtitle text-white/60">
+                  <p className="audio-subtitle text-white/50">
                     🎵 Ambient Music • Add songs to start your queue
                   </p>
                 </>
               ) : (
-                <p className="audio-subtitle text-white/70">No song playing</p>
+                <p className="audio-subtitle text-white/50">No song playing</p>
               )}
             </div>
           </div>
