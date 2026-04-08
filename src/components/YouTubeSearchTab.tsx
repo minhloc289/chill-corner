@@ -15,8 +15,8 @@ export function YouTubeSearchTab({ onVideoSelect }: YouTubeSearchTabProps) {
   const handleSearch = () => {
     if (!searchQuery.trim()) return;
 
-    // Generate Google search URL for YouTube
-    const url = `https://www.google.com/search?igu=1&q=site:youtube.com+${encodeURIComponent(searchQuery)}`;
+    // Generate YouTube search URL
+    const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(searchQuery)}`;
     setSearchUrl(url);
   };
 
