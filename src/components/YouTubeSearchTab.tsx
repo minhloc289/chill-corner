@@ -1,115 +1,63 @@
-import { useEffect, useRef, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { useState } from 'react';
+import { Input } from './ui/input';
+import { Button } from './ui/button';
+import { Search, ExternalLink } from 'lucide-react';
 
 interface YouTubeSearchTabProps {
   onVideoSelect: (url: string, title: string) => void;
-  searchEngineId: string;
 }
 
-export function YouTubeSearchTab({
-  onVideoSelect,
-  searchEngineId
-}: YouTubeSearchTabProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const scriptLoadedRef = useRef(false);
+export function YouTubeSearchTab({ onVideoSelect }: YouTubeSearchTabProps) {
+  const [searchQuery, setSearchQuery] = useState('');
 
-  useEffect(() => {
-    // Prevent loading script multiple times
-    if (scriptLoadedRef.current) {
-      setIsLoading(false);
-      return;
-    }
+  const handleSearch = () => {
+    if (!searchQuery.trim()) return;
 
-    // Load Google Custom Search script
-    const script = document.createElement('script');
-    script.src = `https://cse.google.com/cse.js?cx=${searchEngineId}`;
-    script.async = true;
-
-    script.onload = () => {
-      console.log('✅ Google Custom Search loaded');
-      setIsLoading(false);
-      scriptLoadedRef.current = true;
-    };
-
-    script.onerror = () => {
-      console.error('❌ Failed to load Google Custom Search');
-      setIsLoading(false);
-    };
-
-    document.head.appendChild(script);
-
-    return () => {
-      // Cleanup if component unmounts
-      if (script.parentNode) {
-        document.head.removeChild(script);
-      }
-    };
-  }, [searchEngineId]);
-
-  useEffect(() => {
-    // Intercept clicks on search results
-    const handleClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-
-      // Find the closest anchor tag
-      const link = target.closest('a');
-
-      if (!link) return;
-
-      const href = link.href;
-
-      // Check if it's a YouTube link
-      if (href && (href.includes('youtube.com/watch') || href.includes('youtu.be/'))) {
-        e.preventDefault();
-        e.stopPropagation();
-
-        console.log('🎵 YouTube link clicked:', href);
-
-        // Extract title from the result
-        // Google search results have class 'gs-title'
-        const titleElement = link.querySelector('.gs-title') ||
-                           link.querySelector('.gs-snippet') ||
-                           link;
-        const title = titleElement?.textContent?.trim() || 'YouTube Video';
-
-        // Clean up title (remove "..." and extra whitespace)
-        const cleanTitle = title.replace(/\s+/g, ' ').replace(/\.\.\.$/, '').trim();
-
-        console.log('📝 Adding song:', cleanTitle);
-
-        // Call the callback to add the video
-        onVideoSelect(href, cleanTitle);
-      }
-    };
-
-    // Attach click listener to the container
-    const container = containerRef.current;
-    if (container) {
-      container.addEventListener('click', handleClick, true); // Use capture phase
-    }
-
-    return () => {
-      if (container) {
-        container.removeEventListener('click', handleClick, true);
-      }
-    };
-  }, [onVideoSelect]);
+    // Open Google search for YouTube videos in a new window
+    const searchUrl = `https://www.google.com/search?q=site:youtube.com+${encodeURIComponent(searchQuery)}`;
+    window.open(searchUrl, '_blank', 'width=800,height=600');
+  };
 
   return (
-    <div ref={containerRef} className="youtube-search-container">
-      {isLoading && (
-        <div className="flex items-center justify-center p-8">
-          <Loader2 className="h-6 w-6 animate-spin" style={{ color: 'white' }} />
-          <span className="ml-2" style={{ color: 'white' }}>Loading search...</span>
+    <div className="space-y-4">
+      <div className="flex gap-2">
+        <Input
+          type="text"
+          placeholder="Search YouTube videos..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              handleSearch();
+            }
+          }}
+          className="flex-1"
+          autoFocus
+        />
+        <Button onClick={handleSearch} type="button" className="gap-2">
+          <Search className="h-4 w-4" />
+          Search
+        </Button>
+      </div>
+
+      <div className="bg-slate-800/50 rounded-lg p-4 space-y-2">
+        <div className="flex items-start gap-2 text-sm" style={{ color: 'rgba(255,255,255,0.9)' }}>
+          <ExternalLink className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'rgba(147,197,253,0.8)' }} />
+          <div>
+            <p className="font-medium mb-1">How to use:</p>
+            <ol className="text-xs space-y-1 opacity-80 list-decimal list-inside">
+              <li>Click "Search" to open Google in a new window</li>
+              <li>Find the YouTube video you want</li>
+              <li>Copy the video URL from the address bar</li>
+              <li>Come back here and paste it in the "Paste URL" tab</li>
+            </ol>
+          </div>
         </div>
-      )}
+      </div>
 
-      {/* Google Custom Search Element will be inserted here */}
-      <div className="gcse-search"></div>
-
-      <p className="text-xs mt-3 opacity-70" style={{ color: 'white' }}>
-        💡 Tip: Click any YouTube result to add it to your queue
+      <p className="text-xs opacity-60 text-center" style={{ color: 'white' }}>
+        💡 Tip: Or switch to "Paste URL" tab to directly paste a YouTube link
       </p>
     </div>
   );

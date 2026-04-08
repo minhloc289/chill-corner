@@ -15,10 +15,7 @@ const DEFAULT_MUSIC = [
   { url: 'https://www.youtube.com/watch?v=36YnV9STBqc', title: 'Chillhop Essentials - Relaxing Beats' },
 ];
 
-// Google Custom Search Engine ID
-const GOOGLE_SEARCH_ENGINE_ID = import.meta.env.VITE_GOOGLE_SEARCH_ENGINE_ID || '';
-console.log('🔍 Google Search Engine ID loaded:', GOOGLE_SEARCH_ENGINE_ID);
-console.log('🔍 All VITE env vars:', Object.keys(import.meta.env).filter(k => k.startsWith('VITE_')));
+// No configuration needed - using simple Google search
 
 interface Song {
   id: string;
@@ -484,25 +481,13 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
 
               {/* Search Tab */}
               <TabsContent value="search" className="mt-4">
-                {GOOGLE_SEARCH_ENGINE_ID ? (
-                  <YouTubeSearchTab
-                    searchEngineId={GOOGLE_SEARCH_ENGINE_ID}
-                    onVideoSelect={(url, title) => {
-                      console.log('🎵 Video selected from search:', title);
-                      onAddSong(url, title);
-                      setShowAddForm(false);
-                    }}
-                  />
-                ) : (
-                  <div className="text-center p-4">
-                    <p className="text-sm text-yellow-400 mb-2">
-                      ⚠️ Search not configured
-                    </p>
-                    <p className="text-xs opacity-70">
-                      Please add VITE_GOOGLE_SEARCH_ENGINE_ID to your .env.local file
-                    </p>
-                  </div>
-                )}
+                <YouTubeSearchTab
+                  onVideoSelect={(url, title) => {
+                    console.log('🎵 Video selected from search:', title);
+                    onAddSong(url, title);
+                    setShowAddForm(false);
+                  }}
+                />
               </TabsContent>
 
               {/* URL Paste Tab */}
