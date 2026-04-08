@@ -334,15 +334,35 @@
 }
 
 /* Volume Control Styles */
-.volume-slider-container {
-  @apply flex items-center gap-2 opacity-0 transition-opacity duration-200;
-  max-width: 0;
-  overflow: hidden;
+.volume-slider {
+  height: 8px !important;
 }
 
-.volume-slider-visible {
-  opacity: 1;
-  max-width: 200px;
+/* Slider track (background) */
+.volume-slider > span[data-orientation="horizontal"] {
+  background-color: rgba(255, 255, 255, 0.4) !important;
+  height: 6px !important;
+  border-radius: 999px;
+}
+
+/* Slider range (filled portion) */
+.volume-slider > span > span {
+  background-color: white !important;
+  height: 100%;
+}
+
+/* Slider thumb (draggable circle) */
+.volume-slider button[role="slider"] {
+  background-color: white !important;
+  border: 2px solid white !important;
+  width: 14px !important;
+  height: 14px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  transition: transform 0.2s ease;
+}
+
+.volume-slider button[role="slider"]:hover {
+  transform: scale(1.2);
 }
 
 /* Queue Preview Styles */

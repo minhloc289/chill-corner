@@ -12,7 +12,6 @@ export function VolumeControl({ playerRef, isReady }: VolumeControlProps) {
   const [volume, setVolume] = useState(80);
   const [isMuted, setIsMuted] = useState(false);
   const [prevVolume, setPrevVolume] = useState(80);
-  const [showSlider, setShowSlider] = useState(false);
 
   // Load volume from localStorage on mount
   useEffect(() => {
@@ -62,11 +61,7 @@ export function VolumeControl({ playerRef, isReady }: VolumeControlProps) {
   const displayVolume = isMuted ? 0 : volume;
 
   return (
-    <div
-      className="flex items-center gap-2 relative"
-      onMouseEnter={() => setShowSlider(true)}
-      onMouseLeave={() => setShowSlider(false)}
-    >
+    <div className="flex items-center gap-2 relative">
       <Button
         variant="ghost"
         size="icon"
@@ -81,18 +76,16 @@ export function VolumeControl({ playerRef, isReady }: VolumeControlProps) {
         )}
       </Button>
 
-      {/* Volume slider - shows on hover */}
-      <div
-        className={`volume-slider-container ${showSlider ? 'volume-slider-visible' : ''}`}
-      >
+      {/* Volume slider - always visible */}
+      <div className="flex items-center gap-2">
         <Slider
           value={[displayVolume]}
           onValueChange={handleVolumeChange}
           max={100}
           step={1}
-          className="w-20 cursor-pointer"
+          className="w-24 cursor-pointer volume-slider"
         />
-        <span className="text-xs text-white/70 ml-2 min-w-[2rem]">{displayVolume}%</span>
+        <span className="text-xs text-white font-medium min-w-[2.5rem] text-right">{displayVolume}%</span>
       </div>
     </div>
   );
