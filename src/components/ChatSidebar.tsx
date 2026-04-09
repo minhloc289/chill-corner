@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, memo, useCallback } from 'react';
+import { useState, useEffect, useRef, memo, useCallback, useMemo } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
@@ -27,7 +27,7 @@ interface ChatSidebarProps {
 }
 
 // Memoized individual message component to prevent unnecessary re-renders
-const MessageItem = memo(({ msg, formatTime }: { msg: Message; formatTime: (timestamp: string) => string }) => (
+const MessageItem = memo(({ msg, formattedTime }: { msg: Message; formattedTime: string }) => (
   <div
     className={`message ${
       msg.message_type === 'system' ? 'message-system' : 'message-chat'
@@ -37,7 +37,7 @@ const MessageItem = memo(({ msg, formatTime }: { msg: Message; formatTime: (time
       <>
         <div className="message-header">
           <span className="message-username" style={{ color: '#1a1a1a' }}>{msg.username}</span>
-          <span className="message-time" style={{ color: '#666' }}>{formatTime(msg.created_at)}</span>
+          <span className="message-time" style={{ color: '#666' }}>{formattedTime}</span>
         </div>
         <div className="message-text" style={{ color: '#1a1a1a' }}>{msg.message}</div>
       </>
@@ -58,18 +58,54 @@ export function ChatSidebar({
   const [messageText, setMessageText] = useState('');
   const [isEditingName, setIsEditingName] = useState(false);
   const [newName, setNewName] = useState(currentUsername);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const prevMessageCountRef = useRef(0);
+  const timeCache = useRef<Map<string, string>>(new Map());
 
-  // Smart scroll: Only scroll when a NEW message is added, not on every re-render
+  // Memoize formatTime function with caching to prevent recalculations
+  const formatTime = useCallback((timestamp: string): string => {
+    // Check cache first
+    if (timeCache.current.has(timestamp)) {
+      return timeCache.current.get(timestamp)!;
+    }
+
+    // Format and cache
+    const date = new Date(timestamp);
+    const formatted = date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+
+    timeCache.current.set(timestamp, formatted);
+    return formatted;
+  }, []);
+
+  // Memoize messages with pre-formatted times for better performance
+  const messagesWithFormattedTimes = useMemo(() => {
+    return messages.map(msg => ({
+      ...msg,
+      formattedTime: formatTime(msg.created_at)
+    }));
+  }, [messages, formatTime]);
+
+  // Auto-scroll to bottom when new messages arrive - FIXED for Radix ScrollArea
   useEffect(() => {
     const currentMessageCount = messages.length;
     const prevMessageCount = prevMessageCountRef.current;
 
     // Only scroll if we have a new message (count increased)
     if (currentMessageCount > prevMessageCount && currentMessageCount > 0) {
-      // Use 'auto' instead of 'smooth' to prevent animation lag
-      messagesEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
+      // Use requestAnimationFrame for smooth, non-blocking scroll
+      requestAnimationFrame(() => {
+        // Find the Radix ScrollArea viewport (the actual scrollable element)
+        const viewport = scrollContainerRef.current?.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement;
+
+        if (viewport) {
+          // Scroll to bottom instantly
+          viewport.scrollTop = viewport.scrollHeight;
+        }
+      });
     }
 
     // Update the ref for next comparison
@@ -92,16 +128,6 @@ export function ChatSidebar({
     onRename(newName);
     setIsEditingName(false);
   }, [newName, currentUsername, onRename]);
-
-  // Memoize formatTime function to prevent recreating on every render
-  const formatTime = useCallback((timestamp: string) => {
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-    });
-  }, []);
 
   return (
     <div className="chat-sidebar">
@@ -163,12 +189,11 @@ export function ChatSidebar({
 
       {/* Messages section */}
       <div className="messages-section">
-        <ScrollArea className="messages-scroll">
+        <ScrollArea className="messages-scroll" ref={scrollContainerRef}>
           <div className="messages-list">
-            {messages.map((msg) => (
-              <MessageItem key={msg.id} msg={msg} formatTime={formatTime} />
+            {messagesWithFormattedTimes.map((msg) => (
+              <MessageItem key={msg.id} msg={msg} formattedTime={msg.formattedTime} />
             ))}
-            <div ref={messagesEndRef} />
           </div>
         </ScrollArea>
       </div>

@@ -48,6 +48,7 @@ export default function Room() {
   const [members, setMembers] = useState<RoomMember[]>([]);
   const [loading, setLoading] = useState(true);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const messageIdsRef = useRef<Set<string>>(new Set()); // Track all message IDs to prevent duplicates
   const subscriptionRef = useRef<any>(null);
 
   // Initialize or join room
@@ -210,7 +211,13 @@ export default function Room() {
       return;
     }
 
-    setMessages(data || []);
+    const loadedMessages = data || [];
+
+    // Populate the message IDs set with initial messages
+    messageIdsRef.current.clear();
+    loadedMessages.forEach(msg => messageIdsRef.current.add(msg.id));
+
+    setMessages(loadedMessages);
   };
 
   const loadMembers = async (roomIdParam: string) => {
@@ -312,13 +319,31 @@ export default function Room() {
         (payload) => {
           console.log('New message:', payload.new);
           const newMessage = payload.new as Message;
+
+          // Ultra-robust duplicate prevention using Set
+          if (messageIdsRef.current.has(newMessage.id)) {
+            console.log('Duplicate message prevented (Set check):', newMessage.id);
+            return;
+          }
+
+          // Add to tracking set
+          messageIdsRef.current.add(newMessage.id);
+
           setMessages((prev) => {
-            // Prevent duplicates by checking if message ID already exists
+            // Double-check in state as well (backup safety)
             if (prev.some(msg => msg.id === newMessage.id)) {
-              console.log('Duplicate message prevented:', newMessage.id);
+              console.log('Duplicate message prevented (state check):', newMessage.id);
               return prev;
             }
-            return [...prev, newMessage].slice(-50);
+
+            // Add new message and keep last 50
+            const updated = [...prev, newMessage].slice(-50);
+
+            // Clean up old IDs from Set (keep only IDs in current messages)
+            const currentIds = new Set(updated.map(m => m.id));
+            messageIdsRef.current = currentIds;
+
+            return updated;
           });
         }
       )
