@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, memo, useCallback } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
@@ -26,6 +26,28 @@ interface ChatSidebarProps {
   onRename: (newName: string) => void;
 }
 
+// Memoized individual message component to prevent unnecessary re-renders
+const MessageItem = memo(({ msg, formatTime }: { msg: Message; formatTime: (timestamp: string) => string }) => (
+  <div
+    className={`message ${
+      msg.message_type === 'system' ? 'message-system' : 'message-chat'
+    }`}
+  >
+    {msg.message_type === 'chat' ? (
+      <>
+        <div className="message-header">
+          <span className="message-username" style={{ color: '#1a1a1a' }}>{msg.username}</span>
+          <span className="message-time" style={{ color: '#666' }}>{formatTime(msg.created_at)}</span>
+        </div>
+        <div className="message-text" style={{ color: '#1a1a1a' }}>{msg.message}</div>
+      </>
+    ) : (
+      <div className="message-text-system" style={{ color: '#666' }}>{msg.message}</div>
+    )}
+  </div>
+));
+MessageItem.displayName = 'MessageItem';
+
 export function ChatSidebar({
   messages,
   members,
@@ -37,18 +59,31 @@ export function ChatSidebar({
   const [isEditingName, setIsEditingName] = useState(false);
   const [newName, setNewName] = useState(currentUsername);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const prevMessageCountRef = useRef(0);
 
+  // Smart scroll: Only scroll when a NEW message is added, not on every re-render
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    const currentMessageCount = messages.length;
+    const prevMessageCount = prevMessageCountRef.current;
 
-  const handleSendMessage = () => {
+    // Only scroll if we have a new message (count increased)
+    if (currentMessageCount > prevMessageCount && currentMessageCount > 0) {
+      // Use 'auto' instead of 'smooth' to prevent animation lag
+      messagesEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
+    }
+
+    // Update the ref for next comparison
+    prevMessageCountRef.current = currentMessageCount;
+  }, [messages.length]); // Only depend on length, not the entire array
+
+  // Memoize handlers to prevent unnecessary re-renders
+  const handleSendMessage = useCallback(() => {
     if (!messageText.trim()) return;
     onSendMessage(messageText);
     setMessageText('');
-  };
+  }, [messageText, onSendMessage]);
 
-  const handleRename = () => {
+  const handleRename = useCallback(() => {
     if (!newName.trim() || newName === currentUsername) {
       setIsEditingName(false);
       setNewName(currentUsername);
@@ -56,16 +91,17 @@ export function ChatSidebar({
     }
     onRename(newName);
     setIsEditingName(false);
-  };
+  }, [newName, currentUsername, onRename]);
 
-  const formatTime = (timestamp: string) => {
+  // Memoize formatTime function to prevent recreating on every render
+  const formatTime = useCallback((timestamp: string) => {
     const date = new Date(timestamp);
     return date.toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: '2-digit',
       hour12: true,
     });
-  };
+  }, []);
 
   return (
     <div className="chat-sidebar">
@@ -130,24 +166,7 @@ export function ChatSidebar({
         <ScrollArea className="messages-scroll">
           <div className="messages-list">
             {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`message ${
-                  msg.message_type === 'system' ? 'message-system' : 'message-chat'
-                }`}
-              >
-                {msg.message_type === 'chat' ? (
-                  <>
-                    <div className="message-header">
-                      <span className="message-username" style={{ color: '#1a1a1a' }}>{msg.username}</span>
-                      <span className="message-time" style={{ color: '#666' }}>{formatTime(msg.created_at)}</span>
-                    </div>
-                    <div className="message-text" style={{ color: '#1a1a1a' }}>{msg.message}</div>
-                  </>
-                ) : (
-                  <div className="message-text-system" style={{ color: '#666' }}>{msg.message}</div>
-                )}
-              </div>
+              <MessageItem key={msg.id} msg={msg} formatTime={formatTime} />
             ))}
             <div ref={messagesEndRef} />
           </div>
