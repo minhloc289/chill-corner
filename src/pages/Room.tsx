@@ -53,6 +53,9 @@ export default function Room() {
 
   // Initialize or join room
   useEffect(() => {
+    let unsubscribe: (() => void) | null = null;
+    let isMounted = true;
+
     const initRoom = async () => {
       try {
         let currentRoomId = roomId;
@@ -88,9 +91,9 @@ export default function Room() {
             .single();
 
           if (createError) throw createError;
-          setRoom(newRoom);
+          if (isMounted) setRoom(newRoom);
         } else {
-          setRoom(existingRoom);
+          if (isMounted) setRoom(existingRoom);
         }
 
         // Check if member already exists (to avoid duplicate join messages)
@@ -136,35 +139,42 @@ export default function Room() {
           loadMembers(currentRoomId),
         ]);
 
-        // Subscribe to realtime updates
-        const unsubscribe = subscribeToRoom(currentRoomId);
-
-        setLoading(false);
-
-        // Return cleanup function
-        return unsubscribe;
+        // Only subscribe if component is still mounted
+        if (isMounted) {
+          // Subscribe to realtime updates
+          unsubscribe = subscribeToRoom(currentRoomId);
+          if (isMounted) setLoading(false);
+        }
       } catch (error) {
         console.error('Error initializing room:', error);
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
 
-    const cleanup = initRoom();
+    initRoom();
 
-    // Cleanup on unmount
+    // Cleanup on unmount or roomId change
     return () => {
+      isMounted = false;
+
       if (roomId) {
         handleLeaveRoom();
       }
+
       // Cleanup debounce timer
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
       }
-      // Cleanup realtime subscription
-      if (cleanup && typeof cleanup.then === 'function') {
-        cleanup.then((fn) => fn && fn());
-      } else if (typeof cleanup === 'function') {
-        cleanup();
+
+      // Properly cleanup realtime subscription
+      if (unsubscribe && typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+
+      // Additional safety: manually cleanup subscription ref
+      if (subscriptionRef.current) {
+        supabase.removeChannel(subscriptionRef.current);
+        subscriptionRef.current = null;
       }
     };
   }, [roomId, navigate]);
@@ -294,9 +304,13 @@ export default function Room() {
       subscriptionRef.current = null;
     }
 
+    // Use unique channel name with timestamp to prevent conflicts in Strict Mode
+    const channelName = `room:${roomIdParam}:${Date.now()}:${Math.random()}`;
+    console.log('Creating new subscription with channel:', channelName);
+
     // Subscribe to room changes
     const channel = supabase
-      .channel(`room:${roomIdParam}`)
+      .channel(channelName)
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${roomIdParam}` },
@@ -326,7 +340,7 @@ export default function Room() {
             return;
           }
 
-          // Add to tracking set
+          // Add to tracking set - NEVER clear historical IDs
           messageIdsRef.current.add(newMessage.id);
 
           setMessages((prev) => {
@@ -339,9 +353,14 @@ export default function Room() {
             // Add new message and keep last 50
             const updated = [...prev, newMessage].slice(-50);
 
-            // Clean up old IDs from Set (keep only IDs in current messages)
-            const currentIds = new Set(updated.map(m => m.id));
-            messageIdsRef.current = currentIds;
+            // ✅ FIXED: Only add new IDs to Set, preserve historical tracking
+            // This prevents the Set from being wiped on each message
+            // Only clean up if Set gets too large (>200 entries) to prevent memory leak
+            if (messageIdsRef.current.size > 200) {
+              const currentIds = new Set(updated.map(m => m.id));
+              messageIdsRef.current = currentIds;
+              console.log('Set size was', 200, ', reset to current messages');
+            }
 
             return updated;
           });
@@ -369,7 +388,7 @@ export default function Room() {
 
     // Return cleanup function
     return () => {
-      console.log('Unsubscribing from room');
+      console.log('Unsubscribing from room with channel:', channelName);
       supabase.removeChannel(channel);
       subscriptionRef.current = null;
     };
