@@ -2,17 +2,21 @@ Update this file when app purpose, key files, or routes change significantly.
 
 **Current App Description**: Chill Room - A collaborative music listening room with synced YouTube playback, real-time chat, weather ambiance, and multiplayer features using Supabase Realtime.
 
+**Recent Updates**:
+- **Fixed duplicate messages bug**: Implemented multi-layer atomic deduplication with mutex pattern and in-flight queue tracking
+- **Redesigned chat UI**: Facebook Messenger-inspired minimalist design with clean bubbles, hover timestamps, and refined typography
+
 **Key Files**:
 - `src/App.tsx` - Router + providers
 - `src/pages/Index.tsx` - Landing page (create/join room)
-- `src/pages/Room.tsx` - Main room page with realtime sync
+- `src/pages/Room.tsx` - Main room page with realtime sync (includes duplicate prevention logic)
 - `src/components/RoomScene.tsx` - CSS-illustrated cozy room scene
 - `src/components/WeatherOverlay.tsx` - Weather animations (rain/sun/night)
 - `src/components/YouTubePlayer.tsx` - Synced YouTube player component
-- `src/components/ChatSidebar.tsx` - Real-time chat with username editing
+- `src/components/ChatSidebar.tsx` - Real-time chat with username editing (Facebook Messenger style)
 - `src/lib/roomUtils.ts` - Random username generation and room utilities
 - `src/lib/supabaseClient.ts` - Supabase client with Realtime support
-- `src/index.css` - Tailwind + room scene styles + weather animations
+- `src/index.css` - Tailwind + room scene styles + weather animations + Facebook-inspired chat UI
 
 **Database Tables**:
 - `rooms` - Room state (weather, current song, timestamp)

@@ -50,6 +50,8 @@ export default function Room() {
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const messageIdsRef = useRef<Set<string>>(new Set()); // Track all message IDs to prevent duplicates
   const subscriptionRef = useRef<any>(null);
+  const subscriptionActiveRef = useRef<boolean>(false); // Mutex to prevent concurrent subscriptions
+  const messageInsertQueueRef = useRef<Set<string>>(new Set()); // Track in-flight message insertions
 
   // Initialize or join room
   useEffect(() => {
@@ -297,7 +299,16 @@ export default function Room() {
   }, []);
 
   const subscribeToRoom = (roomIdParam: string) => {
-    // Prevent multiple subscriptions
+    // MUTEX: Prevent concurrent subscriptions (fixes duplicate messages)
+    if (subscriptionActiveRef.current) {
+      console.warn('Subscription already active, skipping duplicate subscription attempt');
+      return () => {}; // Return empty cleanup function
+    }
+
+    // Mark subscription as active
+    subscriptionActiveRef.current = true;
+
+    // Cleanup existing subscription
     if (subscriptionRef.current) {
       console.log('Subscription already exists, cleaning up old one');
       supabase.removeChannel(subscriptionRef.current);
@@ -331,35 +342,49 @@ export default function Room() {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${roomIdParam}` },
         (payload) => {
-          console.log('New message:', payload.new);
+          console.log('New message received:', payload.new);
           const newMessage = payload.new as Message;
 
-          // Ultra-robust duplicate prevention using Set
-          if (messageIdsRef.current.has(newMessage.id)) {
-            console.log('Duplicate message prevented (Set check):', newMessage.id);
+          // ATOMIC DUPLICATE PREVENTION: Multi-layer defense
+
+          // Layer 1: Check if already in processing queue (prevents race condition)
+          if (messageInsertQueueRef.current.has(newMessage.id)) {
+            console.warn('🛑 Duplicate prevented (in-flight queue):', newMessage.id);
             return;
           }
 
-          // Add to tracking set - NEVER clear historical IDs
+          // Layer 2: Check if already processed (historical tracking)
+          if (messageIdsRef.current.has(newMessage.id)) {
+            console.warn('🛑 Duplicate prevented (historical set):', newMessage.id);
+            return;
+          }
+
+          // Add to in-flight queue IMMEDIATELY (atomic operation)
+          messageInsertQueueRef.current.add(newMessage.id);
           messageIdsRef.current.add(newMessage.id);
 
+          console.log('✅ Processing new message:', newMessage.id);
+
           setMessages((prev) => {
-            // Double-check in state as well (backup safety)
+            // Layer 3: Final state-level check (backup safety)
             if (prev.some(msg => msg.id === newMessage.id)) {
-              console.log('Duplicate message prevented (state check):', newMessage.id);
+              console.warn('🛑 Duplicate prevented (state check):', newMessage.id);
+              // Remove from queue since it's already in state
+              messageInsertQueueRef.current.delete(newMessage.id);
               return prev;
             }
 
             // Add new message and keep last 50
             const updated = [...prev, newMessage].slice(-50);
 
-            // ✅ FIXED: Only add new IDs to Set, preserve historical tracking
-            // This prevents the Set from being wiped on each message
-            // Only clean up if Set gets too large (>200 entries) to prevent memory leak
+            // Remove from in-flight queue after successful state update
+            messageInsertQueueRef.current.delete(newMessage.id);
+
+            // Cleanup: Only keep last 200 IDs in historical tracking (prevent memory leak)
             if (messageIdsRef.current.size > 200) {
               const currentIds = new Set(updated.map(m => m.id));
               messageIdsRef.current = currentIds;
-              console.log('Set size was', 200, ', reset to current messages');
+              console.log('🧹 Cleaned up message ID set (was >200, now:', currentIds.size, ')');
             }
 
             return updated;
@@ -391,6 +416,9 @@ export default function Room() {
       console.log('Unsubscribing from room with channel:', channelName);
       supabase.removeChannel(channel);
       subscriptionRef.current = null;
+      subscriptionActiveRef.current = false; // Release mutex
+      messageInsertQueueRef.current.clear(); // Clear in-flight queue
+      console.log('✅ Subscription cleanup complete');
     };
   };
 

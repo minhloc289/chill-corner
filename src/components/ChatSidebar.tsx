@@ -38,9 +38,9 @@ const MessageItem = memo(({ msg, formattedTime }: { msg: Message; formattedTime:
         <>
           <div className="message-header">
             <span className="message-username">{msg.username}</span>
-            <span className="message-time">{formattedTime}</span>
           </div>
           <div className="message-text">{msg.message}</div>
+          <span className="message-time">{formattedTime}</span>
         </>
       )}
     </div>
