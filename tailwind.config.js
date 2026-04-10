@@ -16,9 +16,10 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: "var(--font-sans)",
+        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
         serif: "var(--font-serif)",
         mono: "var(--font-mono)",
+        pixel: ['"Press Start 2P"', 'cursive'],
       },
       letterSpacing: {
         tighter: "var(--letter-spacing-tighter, -0.05em)",
@@ -149,12 +150,18 @@ export default {
           "0%": { transform: "translateY(20px)", opacity: "0" },
           "100%": { transform: "translateY(0)", opacity: "1" },
         },
+        "pixel-pop": {
+          "0%": { transform: "scale(0)" },
+          "60%": { transform: "scale(1.2)" },
+          "100%": { transform: "scale(1)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "fade-in": "fade-in 0.5s ease-in-out",
         "slide-up": "slide-up 0.6s ease-out",
+        "pixel-pop": "pixel-pop 0.2s ease-out",
       },
     },
   },

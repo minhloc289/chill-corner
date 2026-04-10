@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { RoomScene } from '@/components/RoomScene';
 import { YouTubePlayer } from '@/components/YouTubePlayer';
 import { ChatSidebar } from '@/components/ChatSidebar';
+import { ChatToggleButton } from '@/components/ChatToggleButton';
 import { getUserId, getUsername, saveUsername, generateRoomId } from '@/lib/roomUtils';
 
 interface Room {
@@ -25,6 +26,7 @@ interface Song {
 
 interface Message {
   id: string;
+  user_id: string;
   username: string;
   message: string;
   message_type: 'chat' | 'system';
@@ -47,11 +49,19 @@ export default function Room() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [members, setMembers] = useState<RoomMember[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isChatOpen, setIsChatOpen] = useState(() => {
+    const saved = localStorage.getItem('chill-room-chat-open');
+    return saved !== null ? saved === 'true' : true;
+  });
+  const [unreadCount, setUnreadCount] = useState(0);
+  const isChatOpenRef = useRef(isChatOpen);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const messageIdsRef = useRef<Set<string>>(new Set()); // Track all message IDs to prevent duplicates
+  const messageIdsRef = useRef<Set<string>>(new Set());
   const subscriptionRef = useRef<any>(null);
-  const subscriptionActiveRef = useRef<boolean>(false); // Mutex to prevent concurrent subscriptions
-  const messageInsertQueueRef = useRef<Set<string>>(new Set()); // Track in-flight message insertions
+  const subscriptionActiveRef = useRef<boolean>(false);
+  const messageInsertQueueRef = useRef<Set<string>>(new Set());
+  const sendingRef = useRef<boolean>(false); // Prevent rapid double-sends
+  const leaveTimerRef = useRef<NodeJS.Timeout | null>(null); // Delay leave to handle Strict Mode remount
 
   // Initialize or join room
   useEffect(() => {
@@ -98,6 +108,12 @@ export default function Room() {
           if (isMounted) setRoom(existingRoom);
         }
 
+        // Cancel any pending leave (handles React Strict Mode remount)
+        if (leaveTimerRef.current) {
+          clearTimeout(leaveTimerRef.current);
+          leaveTimerRef.current = null;
+        }
+
         // Check if member already exists (to avoid duplicate join messages)
         const { data: existingMember } = await supabase
           .from('room_members')
@@ -141,6 +157,7 @@ export default function Room() {
           loadMembers(currentRoomId),
         ]);
 
+
         // Only subscribe if component is still mounted
         if (isMounted) {
           // Subscribe to realtime updates
@@ -159,8 +176,11 @@ export default function Room() {
     return () => {
       isMounted = false;
 
+      // Delay leave to handle React Strict Mode remount (cancellable)
       if (roomId) {
-        handleLeaveRoom();
+        leaveTimerRef.current = setTimeout(() => {
+          handleLeaveRoom();
+        }, 200);
       }
 
       // Cleanup debounce timer
@@ -194,6 +214,19 @@ export default function Room() {
 
     return () => clearInterval(interval);
   }, [roomId, userId]);
+
+  // Keep chat open ref in sync for subscription callbacks
+  useEffect(() => {
+    isChatOpenRef.current = isChatOpen;
+    localStorage.setItem('chill-room-chat-open', String(isChatOpen));
+  }, [isChatOpen]);
+
+  const handleToggleChat = useCallback(() => {
+    setIsChatOpen(prev => {
+      if (!prev) setUnreadCount(0);
+      return !prev;
+    });
+  }, []);
 
   const loadPlaylist = async (roomIdParam: string) => {
     const { data, error } = await supabase
@@ -270,11 +303,9 @@ export default function Room() {
     const needsNormalization = songs.some((song, index) => song.position !== index);
 
     if (!needsNormalization) {
-      console.log('Playlist positions already normalized');
       return;
     }
 
-    console.log('Normalizing playlist positions...');
 
     // Update each song with new sequential position
     for (let i = 0; i < songs.length; i++) {
@@ -284,7 +315,6 @@ export default function Room() {
         .eq('id', songs[i].id);
     }
 
-    console.log('Playlist positions normalized');
   };
 
   // Debounced version to prevent excessive re-renders
@@ -310,14 +340,12 @@ export default function Room() {
 
     // Cleanup existing subscription
     if (subscriptionRef.current) {
-      console.log('Subscription already exists, cleaning up old one');
       supabase.removeChannel(subscriptionRef.current);
       subscriptionRef.current = null;
     }
 
     // Use unique channel name with timestamp to prevent conflicts in Strict Mode
     const channelName = `room:${roomIdParam}:${Date.now()}:${Math.random()}`;
-    console.log('Creating new subscription with channel:', channelName);
 
     // Subscribe to room changes
     const channel = supabase
@@ -326,7 +354,6 @@ export default function Room() {
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${roomIdParam}` },
         (payload) => {
-          console.log('Room updated:', payload.new);
           setRoom(payload.new as Room);
         }
       )
@@ -334,7 +361,6 @@ export default function Room() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'playlist', filter: `room_id=eq.${roomIdParam}` },
         (payload) => {
-          console.log('Playlist changed:', payload);
           loadPlaylist(roomIdParam);
         }
       )
@@ -342,49 +368,36 @@ export default function Room() {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${roomIdParam}` },
         (payload) => {
-          console.log('New message received:', payload.new);
           const newMessage = payload.new as Message;
 
-          // ATOMIC DUPLICATE PREVENTION: Multi-layer defense
+          // Layer 1: In-flight queue check
+          if (messageInsertQueueRef.current.has(newMessage.id)) return;
 
-          // Layer 1: Check if already in processing queue (prevents race condition)
-          if (messageInsertQueueRef.current.has(newMessage.id)) {
-            console.warn('🛑 Duplicate prevented (in-flight queue):', newMessage.id);
-            return;
-          }
+          // Layer 2: Historical ID check (includes optimistic sends)
+          if (messageIdsRef.current.has(newMessage.id)) return;
 
-          // Layer 2: Check if already processed (historical tracking)
-          if (messageIdsRef.current.has(newMessage.id)) {
-            console.warn('🛑 Duplicate prevented (historical set):', newMessage.id);
-            return;
-          }
-
-          // Add to in-flight queue IMMEDIATELY (atomic operation)
+          // Mark as processing
           messageInsertQueueRef.current.add(newMessage.id);
           messageIdsRef.current.add(newMessage.id);
 
-          console.log('✅ Processing new message:', newMessage.id);
+          // Track unread when chat is closed
+          if (!isChatOpenRef.current && newMessage.user_id !== userId && newMessage.message_type === 'chat') {
+            setUnreadCount(prev => prev + 1);
+          }
 
           setMessages((prev) => {
-            // Layer 3: Final state-level check (backup safety)
+            // Layer 3: State-level check
             if (prev.some(msg => msg.id === newMessage.id)) {
-              console.warn('🛑 Duplicate prevented (state check):', newMessage.id);
-              // Remove from queue since it's already in state
               messageInsertQueueRef.current.delete(newMessage.id);
               return prev;
             }
 
-            // Add new message and keep last 50
             const updated = [...prev, newMessage].slice(-50);
-
-            // Remove from in-flight queue after successful state update
             messageInsertQueueRef.current.delete(newMessage.id);
 
-            // Cleanup: Only keep last 200 IDs in historical tracking (prevent memory leak)
+            // Prevent memory leak in ID tracking
             if (messageIdsRef.current.size > 200) {
-              const currentIds = new Set(updated.map(m => m.id));
-              messageIdsRef.current = currentIds;
-              console.log('🧹 Cleaned up message ID set (was >200, now:', currentIds.size, ')');
+              messageIdsRef.current = new Set(updated.map(m => m.id));
             }
 
             return updated;
@@ -395,14 +408,11 @@ export default function Room() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'room_members', filter: `room_id=eq.${roomIdParam}` },
         (payload) => {
-          console.log('Room members changed:', payload);
           loadMembersDebounced(roomIdParam);
         }
       )
       .subscribe((status) => {
-        console.log('Realtime subscription status:', status);
         if (status === 'SUBSCRIBED') {
-          console.log('Successfully subscribed to room updates');
         } else if (status === 'CHANNEL_ERROR') {
           console.error('Failed to subscribe to room updates');
         }
@@ -413,12 +423,10 @@ export default function Room() {
 
     // Return cleanup function
     return () => {
-      console.log('Unsubscribing from room with channel:', channelName);
       supabase.removeChannel(channel);
       subscriptionRef.current = null;
       subscriptionActiveRef.current = false; // Release mutex
       messageInsertQueueRef.current.clear(); // Clear in-flight queue
-      console.log('✅ Subscription cleanup complete');
     };
   };
 
@@ -454,7 +462,6 @@ export default function Room() {
   const handleSceneChange = useCallback(async (scenePreset: string) => {
     if (!roomId || !room) return;
 
-    console.log('Changing scene to:', scenePreset);
 
     // Optimistic update - update local state immediately
     setRoom({ ...room, scene_preset: scenePreset });
@@ -474,9 +481,32 @@ export default function Room() {
         .single();
       if (data) setRoom(data);
     } else {
-      console.log('Scene changed successfully');
     }
   }, [roomId, room]);
+
+  // Auto-rotate scene every 30 minutes
+  const sceneRotateRef = useRef<NodeJS.Timeout | null>(null);
+  const SCENE_IDS = ['scene-1', 'scene-2', 'scene-3', 'scene-4', 'scene-5', 'scene-6', 'scene-7', 'scene-8', 'scene-9'];
+  const ROTATE_INTERVAL = 30 * 60 * 1000; // 30 minutes
+
+  const rotateScene = useCallback(() => {
+    if (!roomId || !room) return;
+    const currentId = room.scene_preset || 'scene-1';
+    const others = SCENE_IDS.filter(id => id !== currentId);
+    const nextId = others[Math.floor(Math.random() * others.length)];
+    handleSceneChange(nextId);
+  }, [roomId, room, handleSceneChange]);
+
+  useEffect(() => {
+    if (!roomId || !room) return;
+
+    if (sceneRotateRef.current) clearInterval(sceneRotateRef.current);
+    sceneRotateRef.current = setInterval(rotateScene, ROTATE_INTERVAL);
+
+    return () => {
+      if (sceneRotateRef.current) clearInterval(sceneRotateRef.current);
+    };
+  }, [roomId, room?.scene_preset, rotateScene]);
 
   const handleAddSong = useCallback(async (url: string, title: string) => {
     if (!roomId) return;
@@ -484,7 +514,6 @@ export default function Room() {
     // Check if there's a current song playing
     if (!room?.current_song_url) {
       // NO SONG PLAYING - Start immediately (don't add to queue)
-      console.log('No song playing, starting immediately:', title);
 
       // OPTIMISTIC: Update local state
       setRoom((prev) => prev ? {
@@ -510,7 +539,6 @@ export default function Room() {
       }
     } else {
       // SONG PLAYING - Add to queue
-      console.log('Song playing, adding to queue:', title);
 
       // Calculate next position safely - use playlist length as next position
       const nextPosition = playlist.length;
@@ -550,7 +578,6 @@ export default function Room() {
         // Replace temp with real data
         setPlaylist((prev) => prev.map((s) => (s.id === tempSong.id ? data : s)));
 
-        console.log('Song added to queue successfully');
       } catch (error) {
         console.error('Error in add song operation:', error);
         // Remove temp song on error
@@ -562,13 +589,11 @@ export default function Room() {
   const handleSkip = useCallback(async () => {
     if (!roomId) return;
 
-    console.log('Skip requested. Current playlist length:', playlist.length);
 
     // Get next song in queue BEFORE any operations
     const nextSong = playlist[0];
 
     if (nextSong) {
-      console.log('Skipping to next song:', nextSong.title);
 
       try {
         // OPTIMISTIC: Update local state immediately for better UX
@@ -619,7 +644,6 @@ export default function Room() {
         // 3. Normalize positions after successful skip
         await normalizePlaylistPositions(roomId);
 
-        console.log('Skip completed successfully');
       } catch (error) {
         console.error('Error during skip operation:', error);
         // Reload everything to ensure consistency
@@ -628,7 +652,6 @@ export default function Room() {
         if (roomData) setRoom(roomData);
       }
     } else {
-      console.log('No more songs in queue, clearing current song');
 
       try {
         // OPTIMISTIC: Clear current song locally
@@ -665,7 +688,6 @@ export default function Room() {
   const handleRemoveSong = useCallback(async (songId: string) => {
     if (!roomId) return;
 
-    console.log('Removing song from queue:', songId);
 
     try {
       // OPTIMISTIC: Remove from local state immediately
@@ -688,7 +710,6 @@ export default function Room() {
       // Normalize positions after removal to avoid gaps
       await normalizePlaylistPositions(roomId);
 
-      console.log('Song removed and positions normalized');
     } catch (error) {
       console.error('Error in remove song operation:', error);
       await loadPlaylist(roomId);
@@ -698,13 +719,53 @@ export default function Room() {
   const handleSendMessage = useCallback(async (message: string) => {
     if (!roomId) return;
 
-    await supabase.from('messages').insert({
-      room_id: roomId,
+    // Prevent rapid double-sends
+    if (sendingRef.current) return;
+    sendingRef.current = true;
+
+    // Optimistic update: show message instantly with temp ID
+    const tempId = `temp-${Date.now()}-${Math.random()}`;
+    const optimisticMessage: Message = {
+      id: tempId,
       user_id: userId,
       username,
       message,
       message_type: 'chat',
-    });
+      created_at: new Date().toISOString(),
+    };
+
+    setMessages(prev => [...prev, optimisticMessage].slice(-50));
+
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .insert({
+          room_id: roomId,
+          user_id: userId,
+          username,
+          message,
+          message_type: 'chat',
+        })
+        .select('id')
+        .single();
+
+      if (error) throw error;
+
+      // Track the real ID so the subscription handler skips it
+      if (data) {
+        messageIdsRef.current.add(data.id);
+        // Replace temp message with real ID
+        setMessages(prev =>
+          prev.map(msg => msg.id === tempId ? { ...msg, id: data.id } : msg)
+        );
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+      // Remove optimistic message on failure
+      setMessages(prev => prev.filter(msg => msg.id !== tempId));
+    } finally {
+      sendingRef.current = false;
+    }
   }, [roomId, userId, username]);
 
   const handleRename = useCallback(async (newName: string) => {
@@ -742,8 +803,8 @@ export default function Room() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <p className="text-lg">Loading room...</p>
+      <div className="flex items-center justify-center h-screen" style={{ background: 'var(--pixel-bg-deep)' }}>
+        <p className="font-pixel text-sm" style={{ color: 'var(--pixel-accent-cyan)' }}>Loading room...</p>
       </div>
     );
   }
@@ -761,6 +822,12 @@ export default function Room() {
           onAddSong={handleAddSong}
           onSkip={handleSkip}
           onRemoveSong={handleRemoveSong}
+          isChatOpen={isChatOpen}
+        />
+        <ChatToggleButton
+          isOpen={isChatOpen}
+          onToggle={handleToggleChat}
+          unreadCount={unreadCount}
         />
       </div>
       <ChatSidebar
@@ -769,6 +836,7 @@ export default function Room() {
         currentUsername={username}
         onSendMessage={handleSendMessage}
         onRename={handleRename}
+        isOpen={isChatOpen}
       />
     </div>
   );

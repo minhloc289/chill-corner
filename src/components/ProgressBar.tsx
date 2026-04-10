@@ -53,10 +53,18 @@ export function ProgressBar({ playerRef, isReady, isPlaying }: ProgressBarProps)
   const formatTime = (seconds: number): string => {
     if (!seconds || !isFinite(seconds)) return '0:00';
 
-    const mins = Math.floor(seconds / 60);
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
     const secs = Math.floor(seconds % 60);
+
+    if (hours > 0) {
+      return `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
+
+  // Detect livestream (duration > 24 hours or 0)
+  const isLivestream = duration > 86400 || (duration === 0 && isPlaying);
 
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!isReady || !playerRef.current || !progressRef.current || duration === 0) return;
@@ -137,9 +145,18 @@ export function ProgressBar({ playerRef, isReady, isPlaying }: ProgressBarProps)
       </div>
 
       {/* Time display */}
-      <div className="flex justify-between text-xs text-white/70 px-1">
-        <span>{formatTime(currentTime)}</span>
-        <span>{formatTime(duration)}</span>
+      <div className="flex justify-between px-1 progress-time-display">
+        {isLivestream ? (
+          <>
+            <span className="progress-live-badge">LIVE</span>
+            <span>{formatTime(currentTime)}</span>
+          </>
+        ) : (
+          <>
+            <span>{formatTime(currentTime)}</span>
+            <span>{formatTime(duration)}</span>
+          </>
+        )}
       </div>
     </div>
   );

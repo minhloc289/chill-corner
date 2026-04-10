@@ -1,4 +1,4 @@
-import { Button } from './ui/button';
+import { ChevronLeft, ChevronRight, Shuffle } from 'lucide-react';
 
 interface RoomSceneProps {
   scenePreset: string;
@@ -6,45 +6,56 @@ interface RoomSceneProps {
 }
 
 const scenePresets = [
-  { id: 'scene-1', number: 1, image: '/scene-1.gif' },
-  { id: 'scene-2', number: 2, image: '/scene-2.gif' },
-  { id: 'scene-3', number: 3, image: '/scene-3.gif' },
-  { id: 'scene-4', number: 4, image: '/scene-4.gif' },
+  { id: 'scene-1', image: '/scene-1.gif' },
+  { id: 'scene-2', image: '/scene-2.gif' },
+  { id: 'scene-3', image: '/scene-3.gif' },
+  { id: 'scene-4', image: '/scene-4.gif' },
+  { id: 'scene-5', image: '/scene-5.gif' },
+  { id: 'scene-6', image: '/scene-6.gif' },
+  { id: 'scene-7', image: '/scene-7.gif' },
+  { id: 'scene-8', image: '/scene-8.gif' },
+  { id: 'scene-9', image: '/scene-9.gif' },
 ];
 
 export function RoomScene({ scenePreset, onSceneChange }: RoomSceneProps) {
-  const currentScene = scenePresets.find((s) => s.id === scenePreset) || scenePresets[0];
+  const currentIndex = scenePresets.findIndex((s) => s.id === scenePreset);
+  const safeIndex = currentIndex >= 0 ? currentIndex : 0;
+  const currentScene = scenePresets[safeIndex];
 
-  console.log('RoomScene render - scenePreset:', scenePreset, 'currentScene:', currentScene);
+  const handlePrev = () => {
+    const prevIndex = (safeIndex - 1 + scenePresets.length) % scenePresets.length;
+    onSceneChange(scenePresets[prevIndex].id);
+  };
 
-  const handleSceneClick = (presetId: string) => {
-    console.log('Button clicked, changing to:', presetId);
-    onSceneChange(presetId);
+  const handleNext = () => {
+    const nextIndex = (safeIndex + 1) % scenePresets.length;
+    onSceneChange(scenePresets[nextIndex].id);
+  };
+
+  const handleShuffle = () => {
+    const others = scenePresets.filter((_, i) => i !== safeIndex);
+    const random = others[Math.floor(Math.random() * others.length)];
+    onSceneChange(random.id);
   };
 
   return (
     <div className="room-scene">
-      {/* Background Image/GIF */}
       <div
         className="room-background"
-        style={{
-          backgroundImage: `url(${currentScene.image})`,
-        }}
+        style={{ backgroundImage: `url(${currentScene.image})` }}
       />
 
-      {/* Scene Number Buttons */}
       <div className="scene-controls">
-        {scenePresets.map((preset) => (
-          <Button
-            key={preset.id}
-            variant={scenePreset === preset.id ? 'default' : 'outline'}
-            size="icon"
-            onClick={() => handleSceneClick(preset.id)}
-            className="h-10 w-10 font-semibold"
-          >
-            {preset.number}
-          </Button>
-        ))}
+        <button onClick={handlePrev} className="scene-btn" aria-label="Previous scene">
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <span className="scene-indicator">{safeIndex + 1}/{scenePresets.length}</span>
+        <button onClick={handleNext} className="scene-btn" aria-label="Next scene">
+          <ChevronRight className="h-4 w-4" />
+        </button>
+        <button onClick={handleShuffle} className="scene-btn" aria-label="Random scene">
+          <Shuffle className="h-3.5 w-3.5" />
+        </button>
       </div>
     </div>
   );

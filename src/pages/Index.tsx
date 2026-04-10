@@ -19,43 +19,49 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-sky-50 to-indigo-100">
-      <div className="max-w-2xl mx-auto px-6 text-center">
-        <div className="mb-8 flex justify-center gap-4">
-          <Music className="h-12 w-12 text-primary animate-pulse" />
-          <Users className="h-12 w-12 text-primary animate-pulse delay-100" />
-          <Cloud className="h-12 w-12 text-primary animate-pulse delay-200" />
-          <Moon className="h-12 w-12 text-primary animate-pulse delay-300" />
+    <div className="landing-page min-h-screen flex items-center justify-center" style={{ background: 'var(--pixel-bg-deep)' }}>
+      <div className="max-w-2xl mx-auto px-6 text-center relative z-10">
+        {/* Pixel headphones character */}
+        <div className="mb-6 flex justify-center">
+          <div className="pixel-headphones" aria-hidden="true" />
         </div>
 
-        <h1 className="text-5xl md:text-7xl font-bold text-foreground mb-4 tracking-tight">
+        <h1 className="text-3xl md:text-5xl font-pixel mb-4 tracking-tight" style={{ color: 'var(--pixel-text-primary)', lineHeight: '1.3' }}>
           Chill Room
         </h1>
 
-        <p className="text-lg md:text-xl text-muted-foreground mb-12 max-w-lg mx-auto">
+        <p className="text-sm md:text-base mb-12 max-w-lg mx-auto" style={{ color: 'var(--pixel-text-secondary)' }}>
           A cozy virtual space to listen to music together, chat with friends, and vibe with synchronized ambiance
         </p>
 
-        <div className="space-y-6 bg-white/80 backdrop-blur-sm rounded-2xl p-8 shadow-xl">
+        <div className="space-y-6 p-8 pixel-border" style={{ background: 'var(--pixel-bg-surface)' }}>
           <div>
             <Button
               onClick={handleCreateRoom}
               size="lg"
-              className="w-full text-lg h-14"
+              className="w-full text-sm h-14 font-pixel"
+              style={{
+                background: 'var(--pixel-accent-cyan)',
+                color: 'var(--pixel-bg-deep)',
+                border: '2px solid var(--pixel-accent-cyan)',
+                borderRadius: '4px',
+                boxShadow: '3px 3px 0 0 rgba(0, 240, 255, 0.3)',
+                fontSize: '11px',
+              }}
             >
               Create New Room
             </Button>
-            <p className="text-sm text-muted-foreground mt-2">
+            <p className="text-xs mt-2 font-pixel" style={{ color: 'var(--pixel-text-secondary)', fontSize: '8px' }}>
               Start a new room and invite your friends
             </p>
           </div>
 
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
+              <span className="w-full" style={{ borderTop: '2px solid var(--pixel-border)' }} />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-white px-2 text-muted-foreground">Or</span>
+              <span className="px-3 font-pixel" style={{ background: 'var(--pixel-bg-surface)', color: 'var(--pixel-text-secondary)', fontSize: '8px' }}>Or</span>
             </div>
           </div>
 
@@ -72,26 +78,40 @@ const Index = () => {
                     handleJoinRoom();
                   }
                 }}
-                className="h-14 text-lg flex-1"
+                className="h-14 text-base flex-1"
+                style={{
+                  background: 'var(--pixel-bg-deep)',
+                  color: 'var(--pixel-text-primary)',
+                  border: '2px solid var(--pixel-border)',
+                  borderRadius: '4px',
+                }}
               />
               <Button
                 onClick={handleJoinRoom}
                 size="lg"
                 variant="outline"
-                className="h-14 px-8"
+                className="h-14 px-8 font-pixel"
                 type="button"
+                style={{
+                  background: 'transparent',
+                  color: 'var(--pixel-accent-magenta)',
+                  border: '2px solid var(--pixel-accent-magenta)',
+                  borderRadius: '4px',
+                  boxShadow: '2px 2px 0 0 rgba(255, 62, 220, 0.3)',
+                  fontSize: '11px',
+                }}
               >
                 Join
               </Button>
             </div>
-            <p className="text-sm text-muted-foreground mt-2">
+            <p className="text-xs mt-2 font-pixel" style={{ color: 'var(--pixel-text-secondary)', fontSize: '8px' }}>
               Join an existing room with a room ID
             </p>
           </div>
         </div>
 
-        <div className="mt-8 text-sm text-muted-foreground">
-          <p>✨ Synced YouTube playback • 🌦️ Weather ambiance • 💬 Real-time chat</p>
+        <div className="mt-8 font-pixel" style={{ color: 'var(--pixel-text-secondary)', fontSize: '8px', lineHeight: '1.8' }}>
+          <p>Synced YouTube playback / Weather ambiance / Real-time chat</p>
         </div>
       </div>
     </div>

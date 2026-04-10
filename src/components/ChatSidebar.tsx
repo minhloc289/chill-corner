@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef, memo, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect, memo, useCallback, useMemo } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { ScrollArea } from './ui/scroll-area';
-import { Send, Users, Edit2, Check, X } from 'lucide-react';
+import { Send, Check, X, LogIn, LogOut, Sparkles, PenLine } from 'lucide-react';
 
 interface Message {
   id: string;
+  user_id: string;
   username: string;
   message: string;
   message_type: 'chat' | 'system';
@@ -24,25 +24,67 @@ interface ChatSidebarProps {
   currentUsername: string;
   onSendMessage: (message: string) => void;
   onRename: (newName: string) => void;
+  isOpen: boolean;
 }
 
-// Memoized individual message component to prevent unnecessary re-renders
-const MessageItem = memo(({ msg, formattedTime }: { msg: Message; formattedTime: string }) => {
-  const isSystem = msg.message_type === 'system';
+const USER_COLORS = [
+  '#6d28d9', '#0891b2', '#b45309', '#059669', '#db2777',
+  '#2563eb', '#dc2626', '#7c3aed', '#0d9488', '#c2410c'
+];
+
+function getUserColor(username: string): string {
+  let hash = 0;
+  for (let i = 0; i < username.length; i++) {
+    hash = username.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return USER_COLORS[Math.abs(hash) % USER_COLORS.length];
+}
+
+const MessageItem = memo(({ msg, formattedTime, userColor, isGrouped, isSelf }: {
+  msg: Message;
+  formattedTime: string;
+  userColor: string;
+  isGrouped: boolean;
+  isSelf: boolean;
+}) => {
+  if (msg.message_type === 'system') {
+    const isJoin = msg.message.includes('joined');
+    const isLeft = msg.message.includes('left');
+    const isRenamed = msg.message.includes('is now');
+    return (
+      <div className="message message-system">
+        {isJoin ? (
+          <LogIn className="sys-lucide sys-color-join" />
+        ) : isLeft ? (
+          <LogOut className="sys-lucide sys-color-leave" />
+        ) : isRenamed ? (
+          <PenLine className="sys-lucide sys-color-rename" />
+        ) : (
+          <Sparkles className="sys-lucide sys-color-default" />
+        )}
+        <span className="message-text-system">{msg.message}</span>
+      </div>
+    );
+  }
 
   return (
-    <div className={`message ${isSystem ? 'message-system' : 'message-chat'}`}>
-      {isSystem ? (
-        <div className="message-text-system">{msg.message}</div>
-      ) : (
-        <>
-          <div className="message-header">
-            <span className="message-username">{msg.username}</span>
-          </div>
-          <div className="message-text">{msg.message}</div>
-          <span className="message-time">{formattedTime}</span>
-        </>
+    <div className={`message msg-row ${isSelf ? 'msg-self' : 'msg-other'} ${isGrouped ? 'msg-grouped' : ''}`}>
+      {!isSelf && !isGrouped && (
+        <div className="msg-avatar" style={{ backgroundColor: userColor }}>
+          {msg.username[0].toUpperCase()}
+        </div>
       )}
+      {!isSelf && isGrouped && <div className="msg-avatar-spacer" />}
+
+      <div className="msg-bubble-wrap">
+        <div className={`msg-bubble ${isSelf ? 'msg-bubble-self' : 'msg-bubble-other'}`}>
+          {!isSelf && !isGrouped && (
+            <div className="msg-bubble-name" style={{ color: userColor }}>{msg.username}</div>
+          )}
+          <span className="msg-bubble-text">{msg.message}</span>
+        </div>
+        <span className="msg-bubble-time">{formattedTime}</span>
+      </div>
     </div>
   );
 });
@@ -54,96 +96,115 @@ export function ChatSidebar({
   currentUsername,
   onSendMessage,
   onRename,
+  isOpen,
 }: ChatSidebarProps) {
   const [messageText, setMessageText] = useState('');
   const [isEditingName, setIsEditingName] = useState(false);
   const [newName, setNewName] = useState(currentUsername);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const prevMessageCountRef = useRef(0);
+  const isNearBottomRef = useRef(true);
+  const justSentRef = useRef(false);
   const timeCache = useRef<Map<string, string>>(new Map());
   const inputDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const lastInputTimeRef = useRef(0);
 
-  // Memoize formatTime function with caching to prevent recalculations
   const formatTime = useCallback((timestamp: string): string => {
-    // Check cache first
     if (timeCache.current.has(timestamp)) {
       return timeCache.current.get(timestamp)!;
     }
-
-    // Format and cache
     const date = new Date(timestamp);
     const formatted = date.toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: '2-digit',
       hour12: true,
     });
-
     timeCache.current.set(timestamp, formatted);
     return formatted;
   }, []);
 
-  // Memoize messages with pre-formatted times for better performance
-  const messagesWithFormattedTimes = useMemo(() => {
-    return messages.map(msg => ({
-      ...msg,
-      formattedTime: formatTime(msg.created_at)
-    }));
-  }, [messages, formatTime]);
+  const processedMessages = useMemo(() => {
+    return messages.map((msg, index) => {
+      const prevMsg = index > 0 ? messages[index - 1] : null;
+      const isGrouped = prevMsg !== null
+        && prevMsg.username === msg.username
+        && prevMsg.message_type === 'chat'
+        && msg.message_type === 'chat'
+        && (new Date(msg.created_at).getTime() - new Date(prevMsg.created_at).getTime()) < 120000;
 
-  // Auto-scroll to bottom when new messages arrive - FIXED for Radix ScrollArea
-  useEffect(() => {
-    const currentMessageCount = messages.length;
-    const prevMessageCount = prevMessageCountRef.current;
+      return {
+        ...msg,
+        formattedTime: formatTime(msg.created_at),
+        userColor: getUserColor(msg.user_id),
+        isGrouped,
+        isSelf: msg.username === currentUsername,
+      };
+    });
+  }, [messages, formatTime, currentUsername]);
 
-    // Only scroll if we have a new message (count increased)
-    if (currentMessageCount > prevMessageCount && currentMessageCount > 0) {
-      // Use requestAnimationFrame for smooth, non-blocking scroll
-      requestAnimationFrame(() => {
-        // Find the Radix ScrollArea viewport (the actual scrollable element)
-        const viewport = scrollContainerRef.current?.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement;
+  // Direct scroll — no Radix, no scrollIntoView, just scrollTop
+  const scrollToBottom = useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, []);
 
-        if (viewport) {
-          // Scroll to bottom instantly
-          viewport.scrollTop = viewport.scrollHeight;
-        }
-      });
+  // Track if user is near the bottom
+  const handleScroll = useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (el) {
+      isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    }
+  }, []);
+
+  // Auto-scroll after DOM updates (useLayoutEffect fires before paint = scrollHeight is accurate)
+  useLayoutEffect(() => {
+    const currentCount = messages.length;
+    const prevCount = prevMessageCountRef.current;
+
+    if (currentCount > prevCount && currentCount > 0) {
+      if (justSentRef.current || isNearBottomRef.current) {
+        scrollToBottom();
+        justSentRef.current = false;
+      }
     }
 
-    // Update the ref for next comparison
-    prevMessageCountRef.current = currentMessageCount;
-  }, [messages.length]); // Only depend on length, not the entire array
+    prevMessageCountRef.current = currentCount;
+  }, [messages, scrollToBottom]);
 
-  // Debounced input handler to prevent duplicate character entry
+  // Initial scroll on first load
+  useEffect(() => {
+    if (messages.length > 0) {
+      scrollToBottom();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages.length > 0]);
+
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.currentTarget.value;
     const now = Date.now();
 
-    // Clear previous debounce timer
     if (inputDebounceRef.current) {
       clearTimeout(inputDebounceRef.current);
     }
 
-    // Set state immediately for UI responsiveness
     setMessageText(newValue);
     lastInputTimeRef.current = now;
 
-    // Debounce any state updates for validation (50ms)
     inputDebounceRef.current = setTimeout(() => {
-      // This ensures no duplicate character processing
       lastInputTimeRef.current = 0;
     }, 50);
   }, []);
 
-  // Memoize handlers to prevent unnecessary re-renders
   const handleSendMessage = useCallback(() => {
     if (!messageText.trim()) return;
 
-    // Clear any pending input debounces
     if (inputDebounceRef.current) {
       clearTimeout(inputDebounceRef.current);
     }
 
+    justSentRef.current = true;
     onSendMessage(messageText);
     setMessageText('');
     lastInputTimeRef.current = 0;
@@ -159,7 +220,6 @@ export function ChatSidebar({
     setIsEditingName(false);
   }, [newName, currentUsername, onRename]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (inputDebounceRef.current) {
@@ -169,95 +229,127 @@ export function ChatSidebar({
   }, []);
 
   return (
-    <div className="chat-sidebar">
+    <div
+      className={`chat-sidebar ${isOpen ? '' : 'chat-sidebar-closed'}`}
+      aria-hidden={!isOpen}
+      {...(!isOpen ? { inert: '' as any } : {})}
+    >
+      {/* Chat header */}
+      <div className="chat-header-pixel">
+        <div className="chat-header-title">
+          <span className="pixel-chat-icon" aria-hidden="true">&gt;_</span>
+          <span>Chat</span>
+        </div>
+        <div className="chat-header-status">
+          <span className="pixel-dot" aria-hidden="true" />
+          <span className="members-count">{members.length} online</span>
+        </div>
+      </div>
+
       {/* Members section */}
       <div className="members-section">
-        <div className="members-header">
-          <Users className="h-5 w-5" />
-          <span className="font-semibold">
-            {members.length} {members.length === 1 ? 'Person' : 'People'}
-          </span>
+        <div className="members-header-row">
         </div>
         <div className="members-list">
-          {members.map((member) => (
-            <div
-              key={member.id}
-              className={`member-item ${
-                member.username === currentUsername ? 'member-item-self' : ''
-              }`}
-            >
-              <div className="member-avatar">
-                {member.username[0].toUpperCase()}
-              </div>
+          {members.map((member) => {
+            const isSelf = member.username === currentUsername;
+            const color = getUserColor(member.user_id);
 
-              {/* Name display/edit for current user */}
-              {member.username === currentUsername && !isEditingName ? (
-                <button
-                  className="member-name member-name-editable"
-                  onClick={() => {
-                    setIsEditingName(true);
-                    setNewName(currentUsername);
-                  }}
-                  title="Click to edit your name"
+            return (
+              <div key={member.id} className="member-row">
+                <div
+                  className={`member-avatar-compact ${isSelf ? 'member-avatar-self' : ''}`}
+                  style={{ backgroundColor: color }}
                 >
-                  {member.username}
-                  <span className="member-name-you">(you)</span>
-                </button>
-              ) : member.username === currentUsername && isEditingName ? (
-                <div className="member-name-edit-container">
-                  <Input
-                    type="text"
-                    value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
-                    onBlur={handleRename}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleRename();
-                      } else if (e.key === 'Escape') {
-                        e.preventDefault();
-                        setIsEditingName(false);
-                        setNewName(currentUsername);
-                      }
-                    }}
-                    className="member-name-input"
-                    autoFocus
-                  />
+                  {member.username[0].toUpperCase()}
+                </div>
+
+                {isSelf && !isEditingName ? (
                   <button
-                    className="member-name-confirm"
-                    onClick={handleRename}
-                    title="Confirm (Enter)"
-                  >
-                    <Check className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    className="member-name-cancel"
+                    className="member-self-name"
                     onClick={() => {
-                      setIsEditingName(false);
+                      setIsEditingName(true);
                       setNewName(currentUsername);
                     }}
-                    title="Cancel (Esc)"
+                    title="Click to edit your name"
                   >
-                    <X className="h-3.5 w-3.5" />
+                    <span className="member-name-text">{member.username}</span>
+                    <span className="member-you-tag">you</span>
                   </button>
-                </div>
-              ) : (
-                <span className="member-name">{member.username}</span>
-              )}
-            </div>
-          ))}
+                ) : isSelf && isEditingName ? (
+                  <div className="member-name-edit-container">
+                    <Input
+                      type="text"
+                      value={newName}
+                      onChange={(e) => setNewName(e.target.value)}
+                      onBlur={handleRename}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleRename();
+                        } else if (e.key === 'Escape') {
+                          e.preventDefault();
+                          setIsEditingName(false);
+                          setNewName(currentUsername);
+                        }
+                      }}
+                      className="member-name-input"
+                      autoFocus
+                    />
+                    <button
+                      className="member-name-confirm"
+                      onClick={handleRename}
+                      title="Confirm (Enter)"
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      className="member-name-cancel"
+                      onClick={() => {
+                        setIsEditingName(false);
+                        setNewName(currentUsername);
+                      }}
+                      title="Cancel (Esc)"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <span className="member-name-text">{member.username}</span>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 
       {/* Messages section */}
       <div className="messages-section">
-        <ScrollArea className="messages-scroll" ref={scrollContainerRef}>
+        <div
+          className="messages-scroll"
+          ref={scrollContainerRef}
+          onScroll={handleScroll}
+        >
           <div className="messages-list">
-            {messagesWithFormattedTimes.map((msg) => (
-              <MessageItem key={msg.id} msg={msg} formattedTime={msg.formattedTime} />
+            {processedMessages.length === 0 && (
+              <div className="chat-empty-state">
+                <div className="pixel-cat" aria-hidden="true" />
+                <p>No messages yet</p>
+                <p className="chat-empty-hint">Say hi to start the conversation</p>
+              </div>
+            )}
+            {processedMessages.map((msg) => (
+              <MessageItem
+                key={msg.id}
+                msg={msg}
+                formattedTime={msg.formattedTime}
+                userColor={msg.userColor}
+                isGrouped={msg.isGrouped}
+                isSelf={msg.isSelf}
+              />
             ))}
           </div>
-        </ScrollArea>
+        </div>
       </div>
 
       {/* Input section */}
@@ -265,7 +357,7 @@ export function ChatSidebar({
         <div className="chat-input-wrapper">
           <Input
             type="text"
-            placeholder="Type a message..."
+            placeholder="Message..."
             value={messageText}
             onChange={handleInputChange}
             onKeyDown={(e) => {

@@ -36,6 +36,7 @@ interface YouTubePlayerProps {
   onAddSong: (url: string, title: string) => void;
   onSkip: () => void;
   onRemoveSong?: (songId: string) => void;
+  isChatOpen?: boolean;
 }
 
 declare global {
@@ -45,7 +46,7 @@ declare global {
   }
 }
 
-export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemoveSong }: YouTubePlayerProps) {
+export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemoveSong, isChatOpen = true }: YouTubePlayerProps) {
   const playerRef = useRef<any>(null);
   const playerContainerId = useRef(`youtube-player-${Math.random().toString(36).substr(2, 9)}`);
   const [songUrl, setSongUrl] = useState('');
@@ -132,45 +133,30 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
             origin: window.location.origin,
           },
           events: {
-            onReady: (event: any) => {
-              console.log('YouTube player ready');
+            onReady: () => {
               setIsReady(true);
             },
             onStateChange: (event: any) => {
-              // Update playing state
               if (event.data === window.YT.PlayerState.PLAYING) {
                 setIsPlaying(true);
               } else if (event.data === window.YT.PlayerState.PAUSED) {
                 setIsPlaying(false);
               } else if (event.data === window.YT.PlayerState.ENDED) {
                 setIsPlaying(false);
-                console.log('Song ended. isPlayingDefault:', isPlayingDefaultRef.current);
-                // If playing default music, move to next default track
                 if (isPlayingDefaultRef.current) {
                   const nextIndex = (currentDefaultIndexRef.current + 1) % DEFAULT_MUSIC.length;
-                  console.log('Moving to next default track:', nextIndex);
                   setCurrentDefaultIndex(nextIndex);
                 } else {
-                  // User song ended, skip to next in queue
-                  console.log('User song ended, calling onSkip...');
                   onSkipRef.current();
                 }
               }
             },
-            onError: (event: any) => {
-              console.error('YouTube player error:', event.data);
-              // Error codes: 2=Invalid ID, 5=HTML5 error, 100=Not found, 101/150=Embed disabled
-              console.log('Auto-skipping to next song due to playback error...');
-
-              // Auto-skip to next song after 2 seconds
+            onError: () => {
               setTimeout(() => {
                 if (isPlayingDefaultRef.current) {
-                  // Try next default track
                   const nextIndex = (currentDefaultIndexRef.current + 1) % DEFAULT_MUSIC.length;
-                  console.log('Error - moving to next default track:', nextIndex);
                   setCurrentDefaultIndex(nextIndex);
                 } else {
-                  console.log('Error - skipping to next user song');
                   onSkipRef.current();
                 }
               }, 2000);
@@ -197,56 +183,33 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
   useEffect(() => {
     if (!isReady || !playerRef.current) return;
 
-    console.log('Player sync - currentSong:', currentSong, 'playlist.length:', playlist.length, 'isPlayingDefault:', isPlayingDefault);
-
     // CASE 1: User has a song playing
     if (currentSong) {
       const videoId = getVideoId(currentSong.url);
-      if (!videoId) {
-        console.error('Invalid video ID for URL:', currentSong.url);
-        return;
-      }
+      if (!videoId) return;
 
-      // Switch from default music to user song
-      if (isPlayingDefault) {
-        console.log('Switching from default music to user song');
-        setIsPlayingDefault(false);
-      }
+      if (isPlayingDefault) setIsPlayingDefault(false);
 
-      // OPTIMIZATION: Only reload if video AND timestamp haven't changed
       const currentStartedAt = new Date(currentSong.startedAt).getTime();
       const isSameSong = currentVideoId === videoId &&
                          Math.abs(currentStartedAt - lastStartedAt) < 1000;
 
-      if (isSameSong) {
-        console.log('Same song and timestamp, skipping reload to prevent stuttering');
-        return;
-      }
+      if (isSameSong) return;
 
       try {
-        // Calculate elapsed time since song started
-        const startedAt = currentStartedAt;
-        const now = Date.now();
-        const elapsedSeconds = Math.max(0, (now - startedAt) / 1000);
+        const elapsedSeconds = Math.max(0, (Date.now() - currentStartedAt) / 1000);
 
-        console.log('Loading user video:', videoId, 'at', elapsedSeconds, 'seconds (AUTOPLAY)');
-
-        // Load video and seek to correct position with autoplay
         playerRef.current.loadVideoById({
           videoId,
           startSeconds: elapsedSeconds,
         });
 
-        // Ensure video starts playing after load
         setTimeout(() => {
-          if (playerRef.current) {
-            playerRef.current.playVideo();
-          }
+          playerRef.current?.playVideo();
         }, 500);
 
-        // Update tracking to prevent unnecessary reloads
         setCurrentVideoId(videoId);
-        setLastStartedAt(startedAt);
+        setLastStartedAt(currentStartedAt);
       } catch (error) {
         console.error('Error loading video:', error);
       }
@@ -255,49 +218,31 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
     else if (!currentSong && playlist.length === 0) {
       const defaultTrack = DEFAULT_MUSIC[currentDefaultIndex];
       const videoId = getVideoId(defaultTrack.url);
+      if (!videoId) return;
 
-      if (!videoId) {
-        console.error('Invalid default music video ID');
-        return;
-      }
-
-      // Only start default if not already playing it
       if (!isPlayingDefault || currentVideoId !== videoId) {
-        console.log('🎵 Starting default music:', defaultTrack.title);
-        console.log('📺 Video ID:', videoId);
         setIsPlayingDefault(true);
 
         try {
-          playerRef.current.loadVideoById({
-            videoId,
-            startSeconds: 0,
-          });
+          playerRef.current.loadVideoById({ videoId, startSeconds: 0 });
 
           setTimeout(() => {
-            if (playerRef.current) {
-              console.log('▶️ Attempting to play default music...');
-              playerRef.current.playVideo();
-            }
+            playerRef.current?.playVideo();
           }, 500);
 
           setCurrentVideoId(videoId);
           defaultMusicStartedAt.current = Date.now();
         } catch (error) {
-          console.error('❌ Error loading default music:', error);
+          console.error('Error loading default music:', error);
         }
       }
     }
-    // CASE 3: No current song but playlist exists -> Stop playing (waiting for skip)
+    // CASE 3: No current song but playlist exists -> Stop
     else if (!currentSong && playlist.length > 0) {
       if (currentVideoId) {
-        console.log('No current song but playlist exists, stopping playback');
         setCurrentVideoId(null);
         setIsPlayingDefault(false);
-        try {
-          playerRef.current?.stopVideo();
-        } catch (e) {
-          console.error('Error stopping video:', e);
-        }
+        try { playerRef.current?.stopVideo(); } catch {}
       }
     }
   }, [currentSong, playlist.length, isReady, currentVideoId, lastStartedAt, isPlayingDefault, currentDefaultIndex]);
@@ -325,20 +270,14 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
         const expectedTime = (now - startedAt) / 1000;
         const drift = Math.abs(currentTime - expectedTime);
 
-        // If drift is more than 3 seconds, resync
         if (drift > 3) {
-          console.log(`Playback drift detected: ${drift.toFixed(2)}s - Resyncing...`);
           playerRef.current.seekTo(expectedTime, true);
-
-          // Ensure it's playing
           const state = playerRef.current.getPlayerState();
           if (state !== window.YT.PlayerState.PLAYING) {
             playerRef.current.playVideo();
           }
         }
-      } catch (error) {
-        console.error('Error in sync check:', error);
-      }
+      } catch {}
     }, 5000);
 
     return () => {
@@ -401,12 +340,21 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
     : '';
 
   return (
-    <div className="audio-player-container">
+    <div className={`audio-player-container ${isChatOpen ? 'chat-open' : ''}`}>
       {/* Hidden YouTube player */}
       <div id={playerContainerId.current} style={{ position: 'absolute', left: '-9999px' }} />
 
+      {/* Floating pixel music notes */}
+      {isPlaying && (
+        <div className="pixel-notes-container" aria-hidden="true">
+          <div className="pixel-note" />
+          <div className="pixel-note" />
+          <div className="pixel-note" />
+        </div>
+      )}
+
       {/* Enhanced Audio Control Bar */}
-      <Card className="audio-control-bar-enhanced">
+      <Card className="audio-control-bar-enhanced pixel-corners">
         {/* Top row: Controls + Info + Expand button */}
         <div className="flex items-center gap-4 w-full">
           {/* Left: Playback controls */}
@@ -446,7 +394,7 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
           <div className="flex items-center gap-4 flex-1 min-w-0">
             {/* Thumbnail */}
             {currentThumbnail && (
-              <div className="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 bg-black/40 shadow-lg">
+              <div className="w-14 h-14 overflow-hidden flex-shrink-0 pixel-border" style={{ borderRadius: '4px' }}>
                 <img
                   src={currentThumbnail}
                   alt="Song thumbnail"
@@ -459,22 +407,46 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
             <div className="audio-info flex-1 min-w-0">
               {currentSong ? (
                 <>
-                  <p className="audio-title text-white">{currentSong.title}</p>
-                  <p className="audio-subtitle text-white/60">
-                    Now Playing • {playlist.length} in queue
-                  </p>
+                  <p className="audio-title">{currentSong.title}</p>
+                  <div className="audio-meta-row">
+                    <p className="audio-subtitle">
+                      {isPlaying && (
+                        <span className="pixel-equalizer" aria-hidden="true">
+                          <span className="pixel-eq-bar" />
+                          <span className="pixel-eq-bar" />
+                          <span className="pixel-eq-bar" />
+                          <span className="pixel-eq-bar" />
+                        </span>
+                      )}
+                      Now Playing
+                    </p>
+                    {playlist.length > 0 && (
+                      <p className="audio-next-up">
+                        Next: <span className="audio-next-title">{playlist[0].title}</span>
+                        {playlist.length > 1 && <span className="audio-next-more"> +{playlist.length - 1}</span>}
+                      </p>
+                    )}
+                  </div>
                 </>
               ) : isPlayingDefault ? (
                 <>
-                  <p className="audio-title text-white">
+                  <p className="audio-title">
                     {DEFAULT_MUSIC[currentDefaultIndex].title}
                   </p>
-                  <p className="audio-subtitle text-white/50">
-                    🎵 Ambient Music • Add songs to start your queue
+                  <p className="audio-subtitle">
+                    {isPlaying && (
+                      <span className="pixel-equalizer" aria-hidden="true">
+                        <span className="pixel-eq-bar" />
+                        <span className="pixel-eq-bar" />
+                        <span className="pixel-eq-bar" />
+                        <span className="pixel-eq-bar" />
+                      </span>
+                    )}
+                    Ambient Music / Add songs to queue
                   </p>
                 </>
               ) : (
-                <p className="audio-subtitle text-white/50">No song playing</p>
+                <p className="audio-subtitle">No song playing</p>
               )}
             </div>
           </div>
@@ -508,25 +480,14 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
       {/* Add Song Form (Expandable) */}
       {showAddForm && (
         <Card className="add-song-expanded">
-          <div className="p-4 space-y-4">
-            <h3 className="text-sm font-semibold mb-2 text-white">Add Song to Queue</h3>
-
-            {/* Tabbed Search Interface */}
+          <div className="add-song-form">
             <YouTubeSearchTab
               onVideoSelect={(url, title) => {
-                console.log('🎵 Video selected:', title);
                 onAddSong(url, title);
               }}
             />
-
-            {/* Divider */}
-            {playlist.length > 0 && (
-              <div className="border-t border-white/10 my-4" />
-            )}
-
-            {/* Queue Preview - Always visible when there are songs */}
-            <QueuePreview playlist={playlist} onRemoveSong={onRemoveSong} maxVisible={4} />
           </div>
+          <QueuePreview playlist={playlist} onRemoveSong={onRemoveSong} />
         </Card>
       )}
     </div>

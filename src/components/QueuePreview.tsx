@@ -11,10 +11,9 @@ interface Song {
 interface QueuePreviewProps {
   playlist: Song[];
   onRemoveSong?: (songId: string) => void;
-  maxVisible?: number;
 }
 
-export function QueuePreview({ playlist, onRemoveSong, maxVisible = 4 }: QueuePreviewProps) {
+export function QueuePreview({ playlist, onRemoveSong }: QueuePreviewProps) {
   if (playlist.length === 0) {
     return null;
   }
@@ -42,54 +41,55 @@ export function QueuePreview({ playlist, onRemoveSong, maxVisible = 4 }: QueuePr
 
   return (
     <div className="queue-preview-container">
-      <h4 className="text-sm font-semibold mb-3 text-white/90 flex items-center gap-2">
-        <span>Up Next</span>
-        <span className="text-white/40 font-normal text-xs">• {playlist.length} songs</span>
-      </h4>
-
-      {/* Scrollable queue list */}
-      <div className="queue-preview-scroll">
-        <div className="space-y-1.5">
-          {playlist.map((song, index) => {
-            const thumbnail = getThumbnail(song.url);
-
-            return (
-              <div key={song.id} className="queue-preview-item group">
-                {/* Position number */}
-                <span className="queue-preview-number">{index + 1}</span>
-
-                {/* Thumbnail */}
-                {thumbnail && (
-                  <div className="queue-preview-thumbnail">
-                    <img
-                      src={thumbnail}
-                      alt={song.title}
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                    />
-                  </div>
-                )}
-
-                {/* Song info */}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-white truncate">{song.title}</p>
-                  <p className="text-xs text-white/50 truncate">Added by {song.added_by}</p>
-                </div>
-
-                {/* Remove button */}
-                {onRemoveSong && (
-                  <button
-                    onClick={() => onRemoveSong(song.id)}
-                    className="queue-preview-remove opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="Remove from queue"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
-            );
-          })}
+      <div className="queue-preview-header">
+        <div className="queue-header-left">
+          <div className="pixel-cassette" aria-hidden="true">
+            <div className="cassette-reel cassette-reel-l" />
+            <div className="cassette-reel cassette-reel-r" />
+          </div>
+          <span className="queue-preview-title">Queue</span>
         </div>
+        <div className="queue-header-right">
+          <span className="queue-count-badge">{playlist.length}</span>
+        </div>
+      </div>
+
+      <div className="queue-preview-scroll">
+        {playlist.map((song, index) => {
+          const thumbnail = getThumbnail(song.url);
+
+          return (
+            <div key={song.id} className="queue-preview-item group">
+              <span className="queue-preview-number">{index + 1}</span>
+
+              {thumbnail && (
+                <div className="queue-preview-thumbnail">
+                  <img
+                    src={thumbnail}
+                    alt={song.title}
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                </div>
+              )}
+
+              <div className="flex-1 min-w-0">
+                <p className="text-xs truncate" style={{ color: 'var(--pixel-text-primary)', fontWeight: 500 }}>{song.title}</p>
+                <p className="truncate mt-0.5" style={{ color: 'var(--pixel-text-secondary)', fontSize: '10px' }}>by {song.added_by}</p>
+              </div>
+
+              {onRemoveSong && (
+                <button
+                  onClick={() => onRemoveSong(song.id)}
+                  className="queue-preview-remove opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Remove from queue"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
