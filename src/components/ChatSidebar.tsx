@@ -168,11 +168,33 @@ export function ChatSidebar({
     });
   }, [messages, currentUsername]);
 
-  const headerSubline = useMemo(() => {
+  // Live-status tier derived from recency of the last chat message.
+  // Drives both the dot color and the label ("LIVE NOW" vs "active Xm").
+  const liveStatus = useMemo(() => {
     const lastChat = [...messages].reverse().find((m) => m.message_type === 'chat');
-    if (!lastChat) return 'quiet room';
-    return `active ${formatRelativeTime(lastChat.created_at)}`;
+    if (!lastChat) {
+      return { tier: 'idle' as const, label: 'quiet room', live: false };
+    }
+    const diff = Date.now() - new Date(lastChat.created_at).getTime();
+    const rel = formatRelativeTime(lastChat.created_at);
+    if (diff < 30_000)        return { tier: 'live' as const,   label: 'LIVE NOW',       live: true };
+    if (diff < 2 * 60_000)    return { tier: 'active' as const, label: `active ${rel}`,  live: false };
+    if (diff < 60 * 60_000)   return { tier: 'warm' as const,   label: `active ${rel}`,  live: false };
+    return                         { tier: 'idle' as const,   label: `active ${rel}`,  live: false };
   }, [messages]);
+
+  // Small bump animation on the listener chip whenever the roster grows.
+  const prevMemberCountRef = useRef(sortedMembers.length);
+  const [listenerBump, setListenerBump] = useState(false);
+  useEffect(() => {
+    const prev = prevMemberCountRef.current;
+    prevMemberCountRef.current = sortedMembers.length;
+    if (sortedMembers.length > prev) {
+      setListenerBump(true);
+      const t = window.setTimeout(() => setListenerBump(false), 450);
+      return () => window.clearTimeout(t);
+    }
+  }, [sortedMembers.length]);
 
   // Instant scroll — no animation race, no Radix, no scrollIntoView.
   const scrollToBottom = useCallback(() => {
@@ -260,16 +282,52 @@ export function ChatSidebar({
       <header className="chat-header-pixel">
         <div className="chat-header-row">
           <div className="chat-header-title">
-            <span className="chat-brand-sun" aria-hidden="true" />
+            <span className="chat-brand-sun" aria-hidden="true">
+              <span className="sun-core" />
+              <span className="sun-ray sun-ray-n" />
+              <span className="sun-ray sun-ray-ne" />
+              <span className="sun-ray sun-ray-e" />
+              <span className="sun-ray sun-ray-se" />
+              <span className="sun-ray sun-ray-s" />
+              <span className="sun-ray sun-ray-sw" />
+              <span className="sun-ray sun-ray-w" />
+              <span className="sun-ray sun-ray-nw" />
+            </span>
             <span>CHILL CORNER</span>
           </div>
-          <div className="chat-header-status">
-            <span className="pixel-dot" aria-hidden="true" />
-            <span className="members-count">{sortedMembers.length} listening</span>
+          <div
+            className={`chat-header-listeners ${listenerBump ? 'chat-header-listeners-bump' : ''}`}
+            title={`${sortedMembers.length} listening`}
+          >
+            <span className="chat-header-eq" aria-hidden="true">
+              <span className="chat-header-eq-bar" />
+              <span className="chat-header-eq-bar" />
+              <span className="chat-header-eq-bar" />
+            </span>
+            <span className="chat-header-listeners-avatars" aria-hidden="true">
+              {sortedMembers.slice(0, 3).map((m) => (
+                <span
+                  key={m.id}
+                  className="chat-header-listeners-avatar"
+                  style={{ backgroundColor: getUserColor(m.user_id) }}
+                  title={m.username}
+                />
+              ))}
+            </span>
+            <span className="chat-header-listeners-count">
+              {sortedMembers.length}
+              {sortedMembers.length > 3 && <span className="chat-header-listeners-plus">+</span>}
+            </span>
           </div>
         </div>
-        <div className="chat-header-subline">
-          <span>{headerSubline}</span>
+        <div
+          className={`chat-header-subline chat-header-live chat-header-live-${liveStatus.tier}`}
+          aria-live="polite"
+        >
+          <span className="chat-header-live-dot" aria-hidden="true" />
+          <span className={liveStatus.live ? 'chat-header-live-label-bold' : 'chat-header-live-label'}>
+            {liveStatus.label}
+          </span>
         </div>
       </header>
 

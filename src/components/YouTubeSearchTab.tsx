@@ -18,6 +18,9 @@ const QUICK_SUGGESTIONS = [
 export function YouTubeSearchTab({ onVideoSelect }: YouTubeSearchTabProps) {
   const [inputValue, setInputValue] = useState('');
   const [mode, setMode] = useState<'search' | 'paste'>('search');
+  // Increments on each successful add so we can re-key the burst element
+  // and replay its CSS animation from the start.
+  const [burstKey, setBurstKey] = useState(0);
 
   const extractVideoId = (url: string) => {
     const patterns = [
@@ -58,6 +61,7 @@ export function YouTubeSearchTab({ onVideoSelect }: YouTubeSearchTabProps) {
       onVideoSelect(url, 'Untitled Video');
     }
     setInputValue('');
+    setBurstKey((k) => k + 1);
   };
 
   const handleSubmit = () => {
@@ -86,7 +90,7 @@ export function YouTubeSearchTab({ onVideoSelect }: YouTubeSearchTabProps) {
   return (
     <div className="add-song-controls">
       {/* Label */}
-      <div className="add-song-label">
+      <div className={`add-song-label ${hasUrl ? 'add-song-label-ready' : ''}`}>
         <Search className="h-3 w-3" />
         <span>{hasUrl ? 'Ready to add' : 'Add Music'}</span>
       </div>
@@ -126,6 +130,37 @@ export function YouTubeSearchTab({ onVideoSelect }: YouTubeSearchTabProps) {
             )}
           </button>
         </div>
+
+        {/* Success celebration — pixel DJ cat pops up above the input
+            whenever a song is added. Re-keyed React element replays the
+            whole animation from scratch every add. */}
+        {burstKey > 0 && (
+          <div key={burstKey} className="add-song-burst" aria-hidden="true">
+            <div className="add-song-character">
+              <div className="asc-headphones">
+                <div className="asc-headphones-band" />
+                <div className="asc-ear-cup asc-ear-cup-left" />
+                <div className="asc-ear-cup asc-ear-cup-right" />
+              </div>
+              <div className="asc-head">
+                <div className="asc-ear asc-ear-left" />
+                <div className="asc-ear asc-ear-right" />
+                <div className="asc-eye asc-eye-left" />
+                <div className="asc-eye asc-eye-right" />
+                <div className="asc-blush asc-blush-left" />
+                <div className="asc-blush asc-blush-right" />
+                <div className="asc-mouth" />
+              </div>
+              <div className="asc-arm asc-arm-left" />
+              <div className="asc-arm asc-arm-right" />
+              <div className="asc-speech">+1</div>
+            </div>
+            <span className="add-song-burst-note add-song-burst-note-1" />
+            <span className="add-song-burst-note add-song-burst-note-2" />
+            <span className="add-song-burst-note add-song-burst-note-3" />
+            <span className="add-song-burst-note add-song-burst-note-4" />
+          </div>
+        )}
       </div>
 
       {/* Quick suggestion chips */}

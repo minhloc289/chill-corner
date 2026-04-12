@@ -1,6 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Volume2, VolumeX } from 'lucide-react';
-import { Slider } from './ui/slider';
 import { Button } from './ui/button';
 
 interface VolumeControlProps {
@@ -8,57 +7,90 @@ interface VolumeControlProps {
   isReady: boolean;
 }
 
+const BAR_COUNT = 10;
+
 export function VolumeControl({ playerRef, isReady }: VolumeControlProps) {
   const [volume, setVolume] = useState(80);
   const [isMuted, setIsMuted] = useState(false);
   const [prevVolume, setPrevVolume] = useState(80);
+  const meterRef = useRef<HTMLDivElement>(null);
+  const isPointerDownRef = useRef(false);
 
-  // Load volume from localStorage on mount
   useEffect(() => {
-    const savedVolume = localStorage.getItem('chill-room-volume');
-    if (savedVolume) {
-      const vol = parseInt(savedVolume, 10);
+    const saved = localStorage.getItem('chill-room-volume');
+    if (saved) {
+      const vol = parseInt(saved, 10);
       setVolume(vol);
       setPrevVolume(vol);
     }
   }, []);
 
-  // Apply volume to player when it changes
   useEffect(() => {
     if (!isReady || !playerRef.current) return;
-
     try {
-      const volumeToSet = isMuted ? 0 : volume;
-      playerRef.current.setVolume(volumeToSet);
+      playerRef.current.setVolume(isMuted ? 0 : volume);
       localStorage.setItem('chill-room-volume', volume.toString());
-    } catch (error) {
-      console.error('Error setting volume:', error);
+    } catch (err) {
+      console.error('Error setting volume:', err);
     }
   }, [volume, isMuted, isReady, playerRef]);
 
-  const handleVolumeChange = (values: number[]) => {
-    const newVolume = values[0];
-    setVolume(newVolume);
-
-    // If user adjusts slider while muted, unmute
-    if (isMuted && newVolume > 0) {
-      setIsMuted(false);
-    }
-  };
-
   const toggleMute = () => {
     if (isMuted) {
-      // Unmute - restore previous volume
       setIsMuted(false);
       setVolume(prevVolume > 0 ? prevVolume : 80);
     } else {
-      // Mute - save current volume
       setPrevVolume(volume);
       setIsMuted(true);
     }
   };
 
+  // Map a clientX coordinate on the meter to a 0–100 volume value.
+  // Rounds to the nearest integer step so the bars feel snappy.
+  const volumeFromClientX = useCallback((clientX: number) => {
+    const el = meterRef.current;
+    if (!el) return volume;
+    const rect = el.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    return Math.round(ratio * 100);
+  }, [volume]);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    isPointerDownRef.current = true;
+    const next = volumeFromClientX(e.clientX);
+    setVolume(next);
+    if (isMuted && next > 0) setIsMuted(false);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isPointerDownRef.current) return;
+    const next = volumeFromClientX(e.clientX);
+    setVolume(next);
+    if (isMuted && next > 0) setIsMuted(false);
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    isPointerDownRef.current = false;
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
+  };
+
+  // Keyboard affordance: arrow keys step 5%, Home/End jump to extremes.
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const step = e.shiftKey ? 10 : 5;
+    let next = volume;
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') next = Math.max(0, volume - step);
+    else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') next = Math.min(100, volume + step);
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = 100;
+    else return;
+    e.preventDefault();
+    setVolume(next);
+    if (isMuted && next > 0) setIsMuted(false);
+  };
+
   const displayVolume = isMuted ? 0 : volume;
+  const activeBars = Math.round((displayVolume / 100) * BAR_COUNT);
 
   return (
     <div className="volume-control-group" title={`Volume ${displayVolume}%`}>
@@ -76,13 +108,28 @@ export function VolumeControl({ playerRef, isReady }: VolumeControlProps) {
         )}
       </Button>
 
-      <Slider
-        value={[displayVolume]}
-        onValueChange={handleVolumeChange}
-        max={100}
-        step={1}
-        className="w-24 cursor-pointer volume-slider"
-      />
+      <div
+        ref={meterRef}
+        className={`volume-meter ${isMuted ? 'volume-meter-muted' : ''}`}
+        role="slider"
+        aria-label="Volume"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={displayVolume}
+        tabIndex={0}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onKeyDown={handleKeyDown}
+      >
+        {Array.from({ length: BAR_COUNT }).map((_, i) => (
+          <span
+            key={i}
+            className={`volume-bar ${i < activeBars ? 'volume-bar-active' : ''}`}
+            aria-hidden="true"
+          />
+        ))}
+      </div>
       <span className="volume-percent">{displayVolume}%</span>
     </div>
   );

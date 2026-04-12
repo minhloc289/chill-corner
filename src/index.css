@@ -951,7 +951,7 @@
   gap: 10px;
 }
 
-/* Section label */
+/* Section label with pixel music-note mascot */
 .add-song-label {
   display: flex;
   align-items: center;
@@ -960,9 +960,23 @@
   font-size: 8px;
   color: var(--pixel-text-secondary);
   text-transform: uppercase;
+  letter-spacing: 0.06em;
+  transition: color 0.2s ease;
 }
 
+.add-song-label-ready {
+  color: var(--pixel-accent-peach);
+  animation: labelPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes labelPulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.65; }
+}
+
+
 .add-song-input-row {
+  position: relative; /* anchor for .add-song-burst */
   display: flex;
   align-items: center;
   gap: 0;
@@ -971,6 +985,276 @@
   border-radius: 6px;
   padding: 3px;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  overflow: visible;
+}
+
+/* Success celebration — pixel DJ cat pops up ABOVE the add button and
+   emits a flurry of pixel notes. Re-keyed React element replays the
+   animation from scratch on every successful add. */
+.add-song-burst {
+  position: absolute;
+  right: 14px;
+  top: 0; /* anchor to top so character can pop ABOVE the input row */
+  pointer-events: none;
+  width: 0;
+  height: 0;
+  z-index: 20;
+}
+
+/* 44×50px pixel DJ cat that pops up above the add button. */
+.add-song-character {
+  position: absolute;
+  right: -12px;
+  bottom: 18px; /* lifts it clear of the input row's top edge */
+  width: 44px;
+  height: 50px;
+  animation: addSongCharPop 2000ms cubic-bezier(0.2, 1.4, 0.4, 1) forwards;
+  transform-origin: bottom center;
+  filter: drop-shadow(0 2px 0 rgba(168, 146, 122, 0.6));
+}
+
+/* Headphones — sun-yellow band + two ear cups */
+.asc-headphones {
+  position: absolute;
+  top: 0;
+  left: 4px;
+  right: 4px;
+  height: 10px;
+  z-index: 3;
+}
+
+.asc-headphones-band {
+  position: absolute;
+  top: 0;
+  left: 2px;
+  right: 2px;
+  height: 4px;
+  background: var(--pixel-accent-sun);
+  border-radius: 16px 16px 0 0;
+  border: 2px solid #caa14a;
+  border-bottom: none;
+}
+
+.asc-ear-cup {
+  position: absolute;
+  top: 4px;
+  width: 8px;
+  height: 10px;
+  background: var(--pixel-accent-sun);
+  border: 2px solid #caa14a;
+  border-radius: 2px;
+}
+
+.asc-ear-cup-left  { left: -4px; }
+.asc-ear-cup-right { right: -4px; }
+
+/* Head — peach square with cat-ear triangles */
+.asc-head {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 32px;
+  height: 30px;
+  background: var(--pixel-accent-peach);
+  border: 3px solid #d87a58;
+  border-radius: 5px;
+  z-index: 2;
+}
+
+.asc-ear {
+  position: absolute;
+  top: -8px;
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 8px solid var(--pixel-accent-peach);
+  filter: drop-shadow(0 -1px 0 #d87a58);
+}
+
+.asc-ear-left  { left: 2px; }
+.asc-ear-right { right: 2px; }
+
+.asc-eye {
+  position: absolute;
+  top: 10px;
+  width: 4px;
+  height: 5px;
+  background: var(--pixel-text-primary);
+  border-radius: 1px;
+  animation: ascBlink 2.2s step-end infinite;
+}
+
+.asc-eye-left  { left: 6px; }
+.asc-eye-right { right: 6px; }
+
+.asc-blush {
+  position: absolute;
+  top: 16px;
+  width: 5px;
+  height: 3px;
+  background: var(--pixel-accent-rose);
+  border-radius: 2px;
+  opacity: 0.85;
+}
+
+.asc-blush-left  { left: 2px; }
+.asc-blush-right { right: 2px; }
+
+.asc-mouth {
+  position: absolute;
+  top: 19px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 6px;
+  height: 3px;
+  background: var(--pixel-text-primary);
+  border-radius: 0 0 4px 4px;
+}
+
+/* Raised paws cheering at the sides */
+.asc-arm {
+  position: absolute;
+  bottom: 12px;
+  width: 6px;
+  height: 14px;
+  background: var(--pixel-accent-peach);
+  border: 2px solid #d87a58;
+  border-radius: 2px;
+  z-index: 1;
+  animation: ascArmWave 400ms ease-in-out 200ms 3;
+}
+
+.asc-arm-left  { left: -4px;  transform-origin: bottom right; }
+.asc-arm-right { right: -4px; transform-origin: bottom left; }
+.asc-arm-right { animation-delay: 350ms; }
+
+/* "+1" speech bubble above the cat */
+.asc-speech {
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 2px 6px;
+  background: var(--pixel-bg-surface);
+  color: var(--pixel-accent-peach);
+  border: 2px solid var(--pixel-accent-peach);
+  border-radius: 3px;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 8px;
+  letter-spacing: 0.04em;
+  box-shadow: 2px 2px 0 0 #d87a58;
+  animation: ascSpeech 1800ms ease-out forwards;
+  white-space: nowrap;
+}
+
+/* Main pop animation — a clear, slow-enough-to-notice journey */
+@keyframes addSongCharPop {
+  0%   { transform: translateY(32px) scale(0.4) rotate(-6deg); opacity: 0; }
+  14%  { transform: translateY(-6px) scale(1.15) rotate(4deg);  opacity: 1; }
+  22%  { transform: translateY(0)    scale(1)    rotate(-3deg); }
+  32%  { transform: translateY(-3px) scale(1.03) rotate(2deg); }
+  42%  { transform: translateY(0)    scale(1)    rotate(-2deg); }
+  52%  { transform: translateY(-2px) scale(1.02) rotate(1deg); }
+  62%, 82% { transform: translateY(0) scale(1) rotate(0); opacity: 1; }
+  100% { transform: translateY(24px) scale(0.6) rotate(8deg); opacity: 0; }
+}
+
+@keyframes ascArmWave {
+  0%, 100% { transform: rotate(0); }
+  50%      { transform: rotate(-22deg); }
+}
+
+.asc-arm-right { animation-name: ascArmWaveRight; }
+@keyframes ascArmWaveRight {
+  0%, 100% { transform: rotate(0); }
+  50%      { transform: rotate(22deg); }
+}
+
+@keyframes ascBlink {
+  0%, 92%, 100% { opacity: 1; transform: scaleY(1); }
+  96%           { opacity: 1; transform: scaleY(0.1); }
+}
+
+@keyframes ascSpeech {
+  0%   { opacity: 0; transform: translate(-50%, 6px) scale(0.4); }
+  15%  { opacity: 1; transform: translate(-50%, -2px) scale(1.1); }
+  25%  { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  75%  { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -8px) scale(0.9); }
+}
+
+.add-song-burst-note {
+  position: absolute;
+  right: 0;
+  top: 30px;
+  width: 4px;
+  height: 4px;
+  background: transparent;
+  opacity: 0;
+  /* Each note is a tiny pixel sprite painted via box-shadow */
+  box-shadow:
+    0   0  0 var(--pixel-accent-peach),
+    4px 0  0 var(--pixel-accent-peach),
+    4px 4px 0 var(--pixel-accent-peach),
+    4px 8px 0 var(--pixel-accent-peach),
+    0   8px 0 var(--pixel-accent-peach);
+  animation: addSongBurst 1500ms cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+}
+
+.add-song-burst-note-1 {
+  --dx: -28px;
+  --dy: -72px;
+  animation-delay: 250ms;
+  box-shadow:
+    0 0 0 var(--pixel-accent-peach), 4px 0 0 var(--pixel-accent-peach),
+    4px 4px 0 var(--pixel-accent-peach), 4px 8px 0 var(--pixel-accent-peach),
+    0 8px 0 var(--pixel-accent-peach);
+}
+.add-song-burst-note-2 {
+  --dx: 18px;
+  --dy: -84px;
+  animation-delay: 400ms;
+  box-shadow:
+    0 0 0 var(--pixel-accent-sun), 4px 0 0 var(--pixel-accent-sun),
+    4px 4px 0 var(--pixel-accent-sun), 4px 8px 0 var(--pixel-accent-sun),
+    0 8px 0 var(--pixel-accent-sun);
+}
+.add-song-burst-note-3 {
+  --dx: -46px;
+  --dy: -58px;
+  animation-delay: 550ms;
+  box-shadow:
+    0 0 0 var(--pixel-accent-rose), 4px 0 0 var(--pixel-accent-rose),
+    4px 4px 0 var(--pixel-accent-rose), 4px 8px 0 var(--pixel-accent-rose),
+    0 8px 0 var(--pixel-accent-rose);
+}
+.add-song-burst-note-4 {
+  --dx: 32px;
+  --dy: -64px;
+  animation-delay: 700ms;
+  box-shadow:
+    0 0 0 var(--pixel-accent-mint), 4px 0 0 var(--pixel-accent-mint),
+    4px 4px 0 var(--pixel-accent-mint), 4px 8px 0 var(--pixel-accent-mint),
+    0 8px 0 var(--pixel-accent-mint);
+}
+
+@keyframes addSongBurst {
+  0% {
+    transform: translate(0, 0) scale(0.4) rotate(0);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+    transform: translate(calc(var(--dx) * 0.4), calc(var(--dy) * 0.3)) scale(1.1) rotate(-10deg);
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--dx), var(--dy)) scale(0.8) rotate(18deg);
+    opacity: 0;
+  }
 }
 
 .add-song-input-row:focus-within {
@@ -1146,48 +1430,65 @@
 }
 
 /* Volume Control Styles - Pixel */
-.volume-slider {
-  height: 6px !important;
+/* Pixel-block volume meter — 10 segments that light peach→sun as volume
+   rises. Clicking or dragging anywhere on the meter sets the volume to
+   that proportion; keyboard arrows step 5%. */
+.volume-meter {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 4px;
+  width: 104px;
+  height: 22px;
+  background: var(--pixel-bg-sunk);
+  border: 2px solid var(--pixel-border);
+  border-radius: 3px;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  touch-action: none;
 }
 
-/* Slider track (background) */
-.volume-slider > span[data-orientation="horizontal"] {
-  background-color: var(--pixel-border) !important;
-  height: 4px !important;
-  border-radius: 0;
-  transition: all 0.2s ease;
+.volume-meter:hover {
+  border-color: var(--pixel-accent-peach);
 }
 
-.volume-slider:hover > span[data-orientation="horizontal"] {
-  background-color: var(--pixel-bg-elevated) !important;
+.volume-meter:focus-visible {
+  border-color: var(--pixel-accent-peach);
+  box-shadow: 0 0 0 2px rgba(255, 154, 118, 0.35);
 }
 
-/* Slider range (filled portion) */
-.volume-slider > span > span {
-  background-color: var(--pixel-accent-sky) !important;
+.volume-bar {
+  flex: 1;
+  min-width: 0;
   height: 100%;
-  border-radius: 0;
+  border-radius: 1px;
+  background: var(--pixel-border);
+  transition: background-color 0.08s ease, box-shadow 0.08s ease;
+  pointer-events: none; /* clicks go to parent for hit-area */
 }
 
-/* Slider thumb (draggable square) */
-.volume-slider button[role="slider"] {
-  background-color: var(--pixel-accent-sky) !important;
-  border: 2px solid var(--pixel-bg-surface) !important;
-  width: 12px !important;
-  height: 12px !important;
-  border-radius: 2px !important;
-  box-shadow: 0 0 6px rgba(125, 200, 255, 0.55);
-  transition: all 0.2s ease;
-  opacity: 1;
+/* Volume bars gradient from peach (low) through sun (mid) to rose (loud).
+   Each bar keeps its own color so the meter reads as a calibrated scale. */
+.volume-bar-active:nth-child(1) { background: var(--pixel-accent-peach); }
+.volume-bar-active:nth-child(2) { background: var(--pixel-accent-peach); }
+.volume-bar-active:nth-child(3) { background: var(--pixel-accent-peach); }
+.volume-bar-active:nth-child(4) { background: #ffb365; }
+.volume-bar-active:nth-child(5) { background: var(--pixel-accent-sun); }
+.volume-bar-active:nth-child(6) { background: var(--pixel-accent-sun); }
+.volume-bar-active:nth-child(7) { background: var(--pixel-accent-sun); }
+.volume-bar-active:nth-child(8) { background: #ff9a76; }
+.volume-bar-active:nth-child(9) { background: var(--pixel-accent-rose); }
+.volume-bar-active:nth-child(10) { background: var(--pixel-accent-rose); box-shadow: 0 0 6px rgba(255, 122, 147, 0.55); }
+
+/* Subtle glow on the last active bar (the "now playing at" tip). */
+.volume-bar-active + .volume-bar:not(.volume-bar-active) {
+  /* marker between active and inactive — handled by natural color break */
 }
 
-.volume-slider:hover button[role="slider"] {
-  box-shadow: 0 0 10px rgba(125, 200, 255, 0.7);
-}
-
-.volume-slider button[role="slider"]:hover,
-.volume-slider button[role="slider"]:focus {
-  box-shadow: 0 0 14px rgba(125, 200, 255, 0.85);
+.volume-meter-muted .volume-bar-active {
+  background: var(--pixel-text-muted);
+  box-shadow: none;
 }
 
 /* Queue Preview - Compact */
@@ -1369,21 +1670,38 @@
 
 /* Suggestion Chips - Pixel */
 .suggestion-chip {
-  @apply text-xs transition-all flex-shrink-0;
+  @apply text-xs flex-shrink-0;
   padding: 6px 14px;
   border-radius: 6px;
   background-color: var(--pixel-bg-elevated);
   color: var(--pixel-text-secondary);
-  border: 1px solid var(--pixel-border);
+  border: 2px solid var(--pixel-border);
+  box-shadow: 1px 1px 0 0 var(--pixel-border);
   cursor: pointer;
   white-space: nowrap;
   font-weight: 500;
+  transition: transform 150ms cubic-bezier(0.2, 0.8, 0.3, 1.4),
+              box-shadow 150ms ease,
+              background-color 150ms ease,
+              border-color 150ms ease,
+              color 150ms ease;
 }
 
 .suggestion-chip:hover {
   background-color: rgba(125, 200, 255, 0.14);
   border-color: var(--pixel-accent-sky);
   color: var(--pixel-accent-sky);
+  transform: translateY(-2px) rotate(-1.5deg);
+  box-shadow: 2px 3px 0 0 #4a8fc7;
+}
+
+.suggestion-chip:nth-child(even):hover {
+  transform: translateY(-2px) rotate(1.5deg);
+}
+
+.suggestion-chip:active {
+  transform: translate(1px, 1px) rotate(0);
+  box-shadow: none;
 }
 
 
@@ -1579,12 +1897,26 @@
   margin-right: -344px;
 }
 
-/* Chat brand header — sticky title bar */
+/* Chat brand header — sticky title bar with a pixel-dashed bottom edge
+   so the header reads like a hand-pixeled game menu rather than a plain
+   divider. */
 .chat-header-pixel {
   @apply flex flex-col flex-shrink-0;
-  padding: 14px 16px 12px;
+  padding: 14px 16px 14px;
   background: transparent;
-  border-bottom: 2px solid var(--pixel-border);
+  border-bottom: none;
+  background-image:
+    /* Repeating 4px-on, 4px-off dash along the bottom edge, using peach */
+    linear-gradient(
+      to right,
+      var(--pixel-accent-peach) 0,
+      var(--pixel-accent-peach) 4px,
+      transparent 4px,
+      transparent 8px
+    );
+  background-repeat: repeat-x;
+  background-position: bottom left;
+  background-size: 8px 2px;
   gap: 4px;
 }
 
@@ -1605,19 +1937,106 @@
   letter-spacing: 0.06em;
 }
 
+/* Pixel sun — central core + 8 radiating rays (N/NE/E/SE/S/SW/W/NW).
+   Rays pulse in two phases for a playful shimmer; the whole sun slowly
+   rotates so the rays don't feel static. */
 .chat-brand-sun {
-  display: inline-flex;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
+  position: relative;
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  animation: sunSpin 18s linear infinite;
+}
+
+.sun-core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 10px;
+  height: 10px;
   background: var(--pixel-accent-sun);
-  box-shadow: 0 0 8px rgba(255, 215, 106, 0.65);
+  border: 2px solid #caa14a;
+  border-radius: 3px;
+  box-shadow:
+    0 0 8px rgba(255, 215, 106, 0.75),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.sun-ray {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 2px;
+  height: 4px;
+  margin-left: -1px;   /* center the 2px-wide ray on the sun center */
+  margin-top: -2px;    /* center the 4px-tall ray on the sun center */
+  background: var(--pixel-accent-sun);
+  border-radius: 1px;
+  animation: sunRayPulse 1.8s ease-in-out infinite;
+  box-shadow: 0 0 4px rgba(255, 215, 106, 0.6);
+}
+
+/* Rotate FIRST (sets the frame), then translate up 10px inside that
+   rotated frame, so each ray shoots outward in its own direction. */
+.sun-ray-n  { transform: rotate(0deg)   translateY(-10px); }
+.sun-ray-ne { transform: rotate(45deg)  translateY(-10px); }
+.sun-ray-e  { transform: rotate(90deg)  translateY(-10px); }
+.sun-ray-se { transform: rotate(135deg) translateY(-10px); }
+.sun-ray-s  { transform: rotate(180deg) translateY(-10px); }
+.sun-ray-sw { transform: rotate(225deg) translateY(-10px); }
+.sun-ray-w  { transform: rotate(270deg) translateY(-10px); }
+.sun-ray-nw { transform: rotate(315deg) translateY(-10px); }
+
+/* Two-phase pulse: cardinal rays shimmer on beat A, diagonals on beat B */
+.sun-ray-n,  .sun-ray-e,  .sun-ray-s,  .sun-ray-w  { animation-delay: 0s; }
+.sun-ray-ne, .sun-ray-se, .sun-ray-sw, .sun-ray-nw { animation-delay: 0.9s; }
+
+@keyframes sunSpin {
+  from { transform: rotate(0); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes sunRayPulse {
+  0%, 100% { opacity: 0.45; }
+  50%      { opacity: 1; }
+}
+
+/* Mini equalizer bars beside the "N LISTENING" label — three pixel bars
+   dancing with step-end keyframes, echoing the player's own equalizer. */
+.chat-header-eq {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 10px;
+  flex-shrink: 0;
+}
+
+.chat-header-eq-bar {
+  width: 2px;
+  background: var(--pixel-accent-mint);
+  border-radius: 1px;
+  box-shadow: 0 0 3px rgba(110, 193, 167, 0.7);
+  animation: chatHeaderEq 0.9s step-end infinite alternate;
+}
+
+.chat-header-eq-bar:nth-child(1) { height: 4px;  animation-delay: 0s;   }
+.chat-header-eq-bar:nth-child(2) { height: 8px;  animation-delay: 0.2s; }
+.chat-header-eq-bar:nth-child(3) { height: 6px;  animation-delay: 0.4s; }
+
+@keyframes chatHeaderEq {
+  0%   { height: 3px; }
+  25%  { height: 9px; }
+  50%  { height: 4px; }
+  75%  { height: 10px; }
+  100% { height: 5px; }
 }
 
 .chat-header-subline {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   font-size: 11px;
   color: var(--pixel-text-secondary);
   line-height: 1.3;
@@ -1625,6 +2044,148 @@
 
 .chat-header-subline-sep {
   color: var(--pixel-text-muted);
+}
+
+/* ============================================
+   Listener badge (right side of header)
+   Pill with EQ bars + avatar stack + count.
+   ============================================ */
+.chat-header-listeners {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 4px 8px;
+  background: var(--pixel-bg-elevated);
+  border: 2px solid var(--pixel-accent-peach);
+  border-radius: 999px;
+  box-shadow: 2px 2px 0 0 #d87a58;
+  transition: transform 180ms cubic-bezier(0.2, 1.2, 0.4, 1),
+              box-shadow 180ms ease;
+}
+
+.chat-header-listeners-bump {
+  animation: chipPop 450ms cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+
+@keyframes chipPop {
+  0%   { transform: scale(1) rotate(0); }
+  30%  { transform: scale(1.14) rotate(-2deg); box-shadow: 2px 3px 0 0 #d87a58, 0 0 12px rgba(255, 154, 118, 0.55); }
+  60%  { transform: scale(0.98) rotate(1deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+
+/* Avatar stack — overlap by 4px so two feel adjacent but distinct */
+.chat-header-listeners-avatars {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.chat-header-listeners-avatar {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1.5px solid var(--pixel-bg-surface);
+  box-shadow: 1px 1px 0 0 rgba(168, 146, 122, 0.35);
+  display: inline-block;
+}
+
+.chat-header-listeners-avatar + .chat-header-listeners-avatar {
+  margin-left: -4px;
+}
+
+.chat-header-listeners-count {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 9px;
+  color: var(--pixel-accent-peach);
+  letter-spacing: 0.04em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-header-listeners-plus {
+  color: var(--pixel-accent-rose);
+  margin-left: 1px;
+}
+
+/* ============================================
+   Live-status chip (subline)
+   Four tiers drive the dot color and label weight.
+   ============================================ */
+.chat-header-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 4px 8px;
+  width: fit-content;
+  background: var(--pixel-bg-elevated);
+  border: 2px solid var(--pixel-border);
+  border-radius: 999px;
+  box-shadow: 1px 1px 0 0 var(--pixel-border-strong);
+}
+
+.chat-header-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 0 transparent;
+}
+
+.chat-header-live-label,
+.chat-header-live-label-bold {
+  font-size: 10px;
+  color: var(--pixel-text-secondary);
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.chat-header-live-label-bold {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+}
+
+/* Tier: LIVE — mint pulsing dot, peach pixel-font label, peach border */
+.chat-header-live-live {
+  border-color: var(--pixel-accent-peach);
+  background: rgba(255, 215, 106, 0.18);
+}
+.chat-header-live-live .chat-header-live-dot {
+  background: var(--pixel-accent-mint);
+  box-shadow: 0 0 6px rgba(110, 193, 167, 0.85);
+  animation: chatLivePulse 1.2s ease-in-out infinite;
+}
+.chat-header-live-live .chat-header-live-label-bold {
+  color: var(--pixel-accent-peach);
+}
+
+/* Tier: active — mint steady dot, muted label */
+.chat-header-live-active {
+  border-color: rgba(110, 193, 167, 0.6);
+}
+.chat-header-live-active .chat-header-live-dot {
+  background: var(--pixel-accent-mint);
+  box-shadow: 0 0 4px rgba(110, 193, 167, 0.55);
+}
+
+/* Tier: warm — sun steady dot */
+.chat-header-live-warm {
+  border-color: rgba(255, 215, 106, 0.65);
+}
+.chat-header-live-warm .chat-header-live-dot {
+  background: var(--pixel-accent-sun);
+  box-shadow: 0 0 4px rgba(255, 215, 106, 0.55);
+}
+
+/* Tier: idle — muted stone, no glow */
+.chat-header-live-idle .chat-header-live-dot {
+  background: var(--pixel-text-muted);
+}
+
+@keyframes chatLivePulse {
+  0%, 100% { transform: scale(1);   opacity: 0.7; box-shadow: 0 0 4px rgba(110, 193, 167, 0.5); }
+  50%      { transform: scale(1.25); opacity: 1;   box-shadow: 0 0 10px rgba(110, 193, 167, 0.9); }
 }
 
 /* Search row */
@@ -2181,6 +2742,15 @@
   .chat-send-button:hover:not(:disabled) svg { animation: none !important; }
   .chat-unseen-pill,
   .chat-unseen-pill svg { animation: none !important; }
+  .add-song-label-ready,
+  .add-song-burst-note,
+  .add-song-character,
+  .asc-arm, .asc-eye, .asc-speech,
+  .chat-brand-sun, .sun-ray,
+  .chat-header-eq-bar,
+  .chat-header-listeners-bump,
+  .chat-header-live-live .chat-header-live-dot { animation: none !important; }
+  .suggestion-chip { transition: none !important; }
   .room-scene::after { display: none; }
 }
 
