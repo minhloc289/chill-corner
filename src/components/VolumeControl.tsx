@@ -61,32 +61,29 @@ export function VolumeControl({ playerRef, isReady }: VolumeControlProps) {
   const displayVolume = isMuted ? 0 : volume;
 
   return (
-    <div className="flex items-center gap-2 relative">
+    <div className="volume-control-group" title={`Volume ${displayVolume}%`}>
       <Button
         variant="ghost"
         size="icon"
         onClick={toggleMute}
-        className="h-8 w-8 flex-shrink-0"
+        className="volume-mute-btn"
         title={isMuted ? 'Unmute' : 'Mute'}
       >
         {isMuted || volume === 0 ? (
-          <VolumeX className="h-4 w-4 text-white" />
+          <VolumeX className="h-4 w-4" />
         ) : (
-          <Volume2 className="h-4 w-4 text-white" />
+          <Volume2 className="h-4 w-4" />
         )}
       </Button>
 
-      {/* Volume slider - always visible */}
-      <div className="flex items-center gap-2">
-        <Slider
-          value={[displayVolume]}
-          onValueChange={handleVolumeChange}
-          max={100}
-          step={1}
-          className="w-24 cursor-pointer volume-slider"
-        />
-        <span className="text-xs text-white font-medium min-w-[2.5rem] text-right">{displayVolume}%</span>
-      </div>
+      <Slider
+        value={[displayVolume]}
+        onValueChange={handleVolumeChange}
+        max={100}
+        step={1}
+        className="w-24 cursor-pointer volume-slider"
+      />
+      <span className="volume-percent">{displayVolume}%</span>
     </div>
   );
 }

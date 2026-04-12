@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from './ui/button';
-import { SkipForward, Play, Pause, ChevronDown, ChevronUp } from 'lucide-react';
+import { SkipForward, Play, Pause, ChevronDown, Plus, ListMusic } from 'lucide-react';
 import { Card } from './ui/card';
 import { YouTubeSearchTab } from './YouTubeSearchTab';
 import { VolumeControl } from './VolumeControl';
@@ -367,9 +367,9 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
               className="h-10 w-10"
             >
               {isPlaying ? (
-                <Pause className="h-5 w-5 text-white" />
+                <Pause className="h-5 w-5" />
               ) : (
-                <Play className="h-5 w-5 text-white" />
+                <Play className="h-5 w-5" />
               )}
             </Button>
             <Button
@@ -386,7 +386,7 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
               disabled={!currentSong && !isPlayingDefault && playlist.length === 0}
               className="h-10 w-10"
             >
-              <SkipForward className="h-5 w-5 text-white" />
+              <SkipForward className="h-5 w-5" />
             </Button>
           </div>
 
@@ -451,23 +451,34 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
             </div>
           </div>
 
-          {/* Right: Volume + Expand button */}
-          <div className="flex items-center gap-2">
-            <VolumeControl playerRef={playerRef} isReady={isReady} />
-
-            <Button
-              variant="ghost"
-              size="icon"
+          {/* Right: Queue CTA + Volume */}
+          <div className="audio-controls-right-group">
+            <button
+              type="button"
+              className={`queue-cta ${showAddForm ? 'queue-cta-active' : ''}`}
               onClick={() => setShowAddForm(!showAddForm)}
-              className="h-8 w-8"
-              title={showAddForm ? 'Collapse' : 'Add songs'}
+              title={showAddForm ? 'Hide queue' : 'Add songs to queue'}
             >
               {showAddForm ? (
-                <ChevronDown className="h-4 w-4 text-white" />
+                <ChevronDown className="h-3.5 w-3.5" />
               ) : (
-                <ChevronUp className="h-4 w-4 text-white" />
+                <Plus className="h-3.5 w-3.5" />
               )}
-            </Button>
+              <span className="queue-cta-label">
+                {showAddForm ? 'CLOSE' : 'ADD'}
+              </span>
+            </button>
+
+            {playlist.length > 0 && (
+              <div className="queue-chip" title={`${playlist.length} in queue`}>
+                <ListMusic className="h-3.5 w-3.5" />
+                <span className="queue-chip-count">{playlist.length}</span>
+              </div>
+            )}
+
+            <div className="audio-controls-divider" aria-hidden="true" />
+
+            <VolumeControl playerRef={playerRef} isReady={isReady} />
           </div>
         </div>
 

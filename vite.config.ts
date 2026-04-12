@@ -16,10 +16,11 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [
       // Inject data-source attributes in development for visual editing
-      mode === 'development' ? injectSourcePlugin({
-        exclude: ['node_modules', '.git', 'dist'],
-        skipElements: ['html', 'body', 'head', 'meta', 'link', 'script', 'style', 'Fragment']
-      }) : null,
+      // Disabled: optidev injectSource conflicts with SWC transform on destructured rest props
+      // mode === 'development' ? injectSourcePlugin({
+      //   exclude: ['node_modules', '.git', 'dist'],
+      //   skipElements: ['html', 'body', 'head', 'meta', 'link', 'script', 'style', 'Fragment']
+      // }) : null,
       // Load visual editor client script in iframe
       visualEditorLoader({
         // CDN URL from env variable (or use plugin's default if not set)

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { ChevronLeft, ChevronRight, Shuffle } from 'lucide-react';
 
 interface RoomSceneProps {
@@ -17,7 +18,21 @@ const scenePresets = [
   { id: 'scene-9', image: '/scene-9.gif' },
 ];
 
+// Sparse positions for ambient sparkles — deterministic, not random per render.
+const SPARKLE_POSITIONS = [
+  { left: '8%',  delay: '0s',   color: 'var(--pixel-accent-sun)' },
+  { left: '22%', delay: '3s',   color: 'var(--pixel-accent-peach)' },
+  { left: '36%', delay: '6s',   color: 'var(--pixel-accent-sky)' },
+  { left: '49%', delay: '1.5s', color: 'var(--pixel-accent-rose)' },
+  { left: '61%', delay: '4.5s', color: 'var(--pixel-accent-mint)' },
+  { left: '74%', delay: '7.5s', color: 'var(--pixel-accent-sun)' },
+  { left: '86%', delay: '2s',   color: 'var(--pixel-accent-peach)' },
+  { left: '93%', delay: '5s',   color: 'var(--pixel-accent-sky)' },
+];
+
 export function RoomScene({ scenePreset, onSceneChange }: RoomSceneProps) {
+  const [hearts, setHearts] = useState<number[]>([]);
+
   const currentIndex = scenePresets.findIndex((s) => s.id === scenePreset);
   const safeIndex = currentIndex >= 0 ? currentIndex : 0;
   const currentScene = scenePresets[safeIndex];
@@ -38,6 +53,14 @@ export function RoomScene({ scenePreset, onSceneChange }: RoomSceneProps) {
     onSceneChange(random.id);
   };
 
+  const handleMascotBoop = () => {
+    const id = Date.now();
+    setHearts((prev) => [...prev, id]);
+    window.setTimeout(() => {
+      setHearts((prev) => prev.filter((h) => h !== id));
+    }, 1200);
+  };
+
   return (
     <div className="room-scene">
       <div
@@ -45,6 +68,23 @@ export function RoomScene({ scenePreset, onSceneChange }: RoomSceneProps) {
         style={{ backgroundImage: `url(${currentScene.image})` }}
       />
 
+      {/* Ambient floating pixel sparkles */}
+      <div className="ambient-sparkles" aria-hidden="true">
+        {SPARKLE_POSITIONS.map((p, i) => (
+          <span
+            key={i}
+            className="ambient-sparkle"
+            style={{
+              left: p.left,
+              animationDelay: p.delay,
+              backgroundColor: p.color,
+              boxShadow: `0 0 6px ${p.color}`,
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Scene controls (top-right) */}
       <div className="scene-controls">
         <button onClick={handlePrev} className="scene-btn" aria-label="Previous scene">
           <ChevronLeft className="h-4 w-4" />
@@ -57,6 +97,19 @@ export function RoomScene({ scenePreset, onSceneChange }: RoomSceneProps) {
           <Shuffle className="h-3.5 w-3.5" />
         </button>
       </div>
+
+      {/* Pixel cat mascot (top-left) — click to boop */}
+      <button
+        className="pixel-mascot"
+        onClick={handleMascotBoop}
+        aria-label="Boop the cat"
+        type="button"
+      >
+        <span className="pixel-mascot-sprite" aria-hidden="true" />
+        {hearts.map((id) => (
+          <span key={id} className="pixel-mascot-heart" aria-hidden="true" />
+        ))}
+      </button>
     </div>
   );
 }

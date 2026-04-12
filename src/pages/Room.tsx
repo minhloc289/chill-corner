@@ -55,13 +55,23 @@ export default function Room() {
   });
   const [unreadCount, setUnreadCount] = useState(0);
   const isChatOpenRef = useRef(isChatOpen);
-  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const messageIdsRef = useRef<Set<string>>(new Set());
   const subscriptionRef = useRef<any>(null);
   const subscriptionActiveRef = useRef<boolean>(false);
   const messageInsertQueueRef = useRef<Set<string>>(new Set());
   const sendingRef = useRef<boolean>(false); // Prevent rapid double-sends
-  const leaveTimerRef = useRef<NodeJS.Timeout | null>(null); // Delay leave to handle Strict Mode remount
+  const presenceChannelRef = useRef<any>(null);
+  const presenceReadyRef = useRef(false);
+  // Latest-value refs so the presence effect (keyed on roomId+userId only)
+  // can read current username + messages without re-subscribing.
+  const usernameRef = useRef(username);
+  useEffect(() => {
+    usernameRef.current = username;
+  }, [username]);
+  const messagesRef = useRef<Message[]>(messages);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   // Initialize or join room
   useEffect(() => {
@@ -108,53 +118,14 @@ export default function Room() {
           if (isMounted) setRoom(existingRoom);
         }
 
-        // Cancel any pending leave (handles React Strict Mode remount)
-        if (leaveTimerRef.current) {
-          clearTimeout(leaveTimerRef.current);
-          leaveTimerRef.current = null;
-        }
+        // Join/leave system messages are written from presence events —
+        // see the presence effect below. Lifecycle-driven writes created
+        // duplicates on refresh and silently dropped on tab close.
 
-        // Check if member already exists (to avoid duplicate join messages)
-        const { data: existingMember } = await supabase
-          .from('room_members')
-          .select('*')
-          .eq('room_id', currentRoomId)
-          .eq('user_id', userId)
-          .single();
-
-        const isNewMember = !existingMember;
-
-        // Join room as member (upsert to handle page refreshes)
-        const { error: memberError } = await supabase
-          .from('room_members')
-          .upsert({
-            room_id: currentRoomId,
-            user_id: userId,
-            username,
-            last_seen: new Date().toISOString(),
-          }, {
-            onConflict: 'room_id,user_id',
-            ignoreDuplicates: false,
-          });
-
-        if (memberError) throw memberError;
-
-        // Add system message for join only if it's a new member
-        if (isNewMember) {
-          await supabase.from('messages').insert({
-            room_id: currentRoomId,
-            user_id: userId,
-            username,
-            message: `${username} joined the room`,
-            message_type: 'system',
-          });
-        }
-
-        // Load initial data
+        // Load initial data (members come from presence — no DB fetch needed).
         await Promise.all([
           loadPlaylist(currentRoomId),
           loadMessages(currentRoomId),
-          loadMembers(currentRoomId),
         ]);
 
 
@@ -176,18 +147,6 @@ export default function Room() {
     return () => {
       isMounted = false;
 
-      // Delay leave to handle React Strict Mode remount (cancellable)
-      if (roomId) {
-        leaveTimerRef.current = setTimeout(() => {
-          handleLeaveRoom();
-        }, 200);
-      }
-
-      // Cleanup debounce timer
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
-
       // Properly cleanup realtime subscription
       if (unsubscribe && typeof unsubscribe === 'function') {
         unsubscribe();
@@ -201,19 +160,238 @@ export default function Room() {
     };
   }, [roomId, navigate]);
 
-  // Update last_seen every 20 seconds (reduced from 10s to minimize re-renders)
+  // Presence: source of truth for the live roster AND join/leave
+  // system messages. Tracks the WebSocket so a tab close is detected
+  // server-side (no missed "left" notifications). Keyed by userId so
+  // multi-tab sessions collapse into one roster entry.
   useEffect(() => {
     if (!roomId) return;
 
-    const interval = setInterval(async () => {
-      await supabase
-        .from('room_members')
-        .update({ last_seen: new Date().toISOString() })
-        .eq('user_id', userId);
-    }, 20000);
+    // Captured per-channel-instance state — reset on each (re-)subscribe.
+    let initialSyncDone = false;
+    const pendingLeaveTimers = new Map<string, number>();
 
-    return () => clearInterval(interval);
+    const channel = supabase.channel(`room-presence:${roomId}`, {
+      config: { presence: { key: userId } },
+    });
+
+    type PresenceEntry = { user_id: string; username: string; online_at: string };
+
+    const readRoster = () => {
+      const state = channel.presenceState<PresenceEntry>();
+      const entries: PresenceEntry[] = [];
+      for (const key of Object.keys(state)) {
+        const e = state[key]?.[0];
+        if (e) entries.push(e as PresenceEntry);
+      }
+      return entries;
+    };
+
+    const syncMembers = () => {
+      const entries = readRoster();
+      setMembers(entries.map((e) => ({
+        id: `presence-${e.user_id}`,
+        user_id: e.user_id,
+        username: e.username,
+      })));
+    };
+
+    // Designated-inserter rule: the remaining user with the smallest
+    // user_id inserts the system message. Deterministic across clients,
+    // so only one writes the row. `exclude` removes a user from the
+    // candidate pool — needed for broadcast-triggered leaves where the
+    // leaver may still be in the server-side presence state.
+    const amDesignatedInserter = (exclude?: string) => {
+      const ids = readRoster()
+        .map((e) => e.user_id)
+        .filter((id) => id !== exclude)
+        .sort();
+      return ids.length > 0 && ids[0] === userId;
+    };
+
+    // Has a system message for this user + keyword been inserted in the
+    // last `windowMs`? Used to dedupe across quick reconnects.
+    const recentlyAnnounced = (uid: string, keyword: string, windowMs = 30_000) => {
+      const cutoff = Date.now() - windowMs;
+      for (const m of messagesRef.current) {
+        if (m.message_type !== 'system') continue;
+        if (m.user_id !== uid) continue;
+        if (!m.message.includes(keyword)) continue;
+        if (new Date(m.created_at).getTime() >= cutoff) return true;
+      }
+      return false;
+    };
+
+    const insertSystemMessage = (uid: string, name: string, message: string) => {
+      supabase.from('messages').insert({
+        room_id: roomId,
+        user_id: uid,
+        username: name,
+        message,
+        message_type: 'system',
+      }).then(({ error }) => {
+        if (error) console.error('Presence system-message insert failed:', error);
+      });
+    };
+
+    const handleJoin = (newPresences: PresenceEntry[]) => {
+      for (const p of newPresences) {
+        if (!p?.user_id || !p?.username) continue;
+
+        // If this user had a pending "left" scheduled, they bounced back
+        // before the grace window — cancel the leave announcement.
+        const pending = pendingLeaveTimers.get(p.user_id);
+        if (pending !== undefined) {
+          clearTimeout(pending);
+          pendingLeaveTimers.delete(p.user_id);
+        }
+
+        // Post-initial-sync only. The initial sync fires a join event
+        // for every existing member — we don't want to announce them.
+        if (!initialSyncDone) continue;
+        // Self-announce: the joiner writes their own message. Simpler
+        // than designated-inserter for joins, and always reliable.
+        if (p.user_id !== userId) continue;
+        if (recentlyAnnounced(p.user_id, 'joined')) continue;
+
+        insertSystemMessage(p.user_id, p.username, `${p.username} joined the room`);
+      }
+    };
+
+    // Schedule the "X left the room" write with a 2s grace period.
+    // `source` drives an important nuance:
+    //   - 'presence': fired by presence.leave — the leaver is already
+    //     removed from presenceState server-side, so the designated-
+    //     inserter check is straightforward.
+    //   - 'broadcast': fired when the leaver's pagehide handler beat
+    //     the server's connection-idle timeout. They may still appear
+    //     in presenceState; we exclude them from designated-inserter
+    //     so the remaining clients can still elect a writer.
+    const scheduleLeaveAnnouncement = (
+      uid: string,
+      name: string,
+      source: 'presence' | 'broadcast',
+    ) => {
+      const existing = pendingLeaveTimers.get(uid);
+      if (existing !== undefined) clearTimeout(existing);
+
+      const timerId = window.setTimeout(() => {
+        pendingLeaveTimers.delete(uid);
+        // Re-verify: user must still be absent from the roster.
+        const stillPresent = readRoster().some((e) => e.user_id === uid);
+        if (source === 'presence' && stillPresent) return;
+        if (!amDesignatedInserter(uid)) return;
+        if (recentlyAnnounced(uid, 'left', 15_000)) return;
+
+        insertSystemMessage(uid, name, `${name} left the room`);
+      }, 2_000);
+
+      pendingLeaveTimers.set(uid, timerId);
+    };
+
+    const handleLeave = (leftPresences: PresenceEntry[]) => {
+      if (!initialSyncDone) return;
+      for (const p of leftPresences) {
+        if (!p?.user_id || !p?.username) continue;
+        scheduleLeaveAnnouncement(p.user_id, p.username, 'presence');
+      }
+    };
+
+    channel
+      .on('presence', { event: 'sync' }, () => {
+        syncMembers();
+        initialSyncDone = true;
+      })
+      .on('presence', { event: 'join' }, ({ newPresences }) => {
+        syncMembers();
+        handleJoin(newPresences as PresenceEntry[]);
+      })
+      .on('presence', { event: 'leave' }, ({ leftPresences }) => {
+        syncMembers();
+        handleLeave(leftPresences as PresenceEntry[]);
+      })
+      // Fast-path: the leaver's pagehide handler fires this broadcast
+      // just before the tab dies. We don't wait for the server's
+      // connection-idle timeout (which can be minutes on some network
+      // paths) — we schedule the 2s grace immediately.
+      .on('broadcast', { event: 'user-leaving' }, ({ payload }) => {
+        if (!initialSyncDone) return;
+        const uid = payload?.user_id;
+        const name = payload?.username;
+        if (typeof uid !== 'string' || typeof name !== 'string') return;
+        if (uid === userId) return; // ignore our own (shouldn't receive it, but be safe)
+        // Optimistically drop the leaver from the local roster so the
+        // UI updates immediately, even though server presence may lag.
+        setMembers((prev) => prev.filter((m) => m.user_id !== uid));
+        scheduleLeaveAnnouncement(uid, name, 'broadcast');
+      })
+      .subscribe((status) => {
+        if (status !== 'SUBSCRIBED') return;
+        presenceReadyRef.current = true;
+        // Track self. Username read via latest-ref so rename doesn't
+        // force a re-subscribe.
+        channel.track({
+          user_id: userId,
+          username: usernameRef.current,
+          online_at: new Date().toISOString(),
+        });
+      });
+
+    presenceChannelRef.current = channel;
+
+    // Announce our own departure just before the tab dies. This is the
+    // ONLY reliable leave signal under tab close — React effect cleanup
+    // is not guaranteed to run, and the server's socket-idle detection
+    // can take minutes. `pagehide` is the modern unload event that fires
+    // reliably across browsers; `beforeunload` is kept as a belt-and-
+    // suspenders fallback for older/niche paths. Handler is idempotent.
+    const announceLeaving = () => {
+      try {
+        // Fire-and-forget broadcast over the open WebSocket. Browsers
+        // flush pending WebSocket sends during pagehide well enough that
+        // this reaches the server in the vast majority of cases.
+        channel.send({
+          type: 'broadcast',
+          event: 'user-leaving',
+          payload: {
+            user_id: userId,
+            username: usernameRef.current,
+          },
+        });
+        channel.untrack();
+      } catch {
+        // best-effort; the tab is dying anyway
+      }
+    };
+
+    window.addEventListener('pagehide', announceLeaving);
+    window.addEventListener('beforeunload', announceLeaving);
+
+    return () => {
+      window.removeEventListener('pagehide', announceLeaving);
+      window.removeEventListener('beforeunload', announceLeaving);
+      presenceReadyRef.current = false;
+      presenceChannelRef.current = null;
+      for (const t of pendingLeaveTimers.values()) clearTimeout(t);
+      pendingLeaveTimers.clear();
+      channel.untrack();
+      supabase.removeChannel(channel);
+    };
   }, [roomId, userId]);
+
+  // Re-announce presence when the user renames — instant propagation to
+  // every other client's roster without any DB round-trip. Guarded on
+  // presenceReadyRef so we never call track() before SUBSCRIBED status.
+  useEffect(() => {
+    if (!presenceReadyRef.current) return;
+    const channel = presenceChannelRef.current;
+    if (!channel) return;
+    channel.track({
+      user_id: userId,
+      username,
+      online_at: new Date().toISOString(),
+    });
+  }, [username, userId]);
 
   // Keep chat open ref in sync for subscription callbacks
   useEffect(() => {
@@ -265,28 +443,6 @@ export default function Room() {
     setMessages(loadedMessages);
   };
 
-  const loadMembers = async (roomIdParam: string) => {
-    // Remove stale members (not seen in last 30 seconds)
-    const thirtySecondsAgo = new Date(Date.now() - 30000).toISOString();
-    await supabase
-      .from('room_members')
-      .delete()
-      .eq('room_id', roomIdParam)
-      .lt('last_seen', thirtySecondsAgo);
-
-    const { data, error } = await supabase
-      .from('room_members')
-      .select('*')
-      .eq('room_id', roomIdParam);
-
-    if (error) {
-      console.error('Error loading members:', error);
-      return;
-    }
-
-    setMembers(data || []);
-  };
-
   // Normalize playlist positions to be sequential (0, 1, 2, ...)
   const normalizePlaylistPositions = async (roomIdParam: string) => {
     const { data: songs, error: fetchError } = await supabase
@@ -316,17 +472,6 @@ export default function Room() {
     }
 
   };
-
-  // Debounced version to prevent excessive re-renders
-  const loadMembersDebounced = useCallback((roomIdParam: string) => {
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-    }
-
-    debounceTimerRef.current = setTimeout(() => {
-      loadMembers(roomIdParam);
-    }, 300); // Wait 300ms after last update
-  }, []);
 
   const subscribeToRoom = (roomIdParam: string) => {
     // MUTEX: Prevent concurrent subscriptions (fixes duplicate messages)
@@ -404,13 +549,6 @@ export default function Room() {
           });
         }
       )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'room_members', filter: `room_id=eq.${roomIdParam}` },
-        (payload) => {
-          loadMembersDebounced(roomIdParam);
-        }
-      )
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
         } else if (status === 'CHANNEL_ERROR') {
@@ -428,26 +566,6 @@ export default function Room() {
       subscriptionActiveRef.current = false; // Release mutex
       messageInsertQueueRef.current.clear(); // Clear in-flight queue
     };
-  };
-
-  const handleLeaveRoom = async () => {
-    if (!roomId) return;
-
-    try {
-      // Add system message
-      await supabase.from('messages').insert({
-        room_id: roomId,
-        user_id: userId,
-        username,
-        message: `${username} left the room`,
-        message_type: 'system',
-      });
-
-      // Remove from members
-      await supabase.from('room_members').delete().eq('user_id', userId);
-    } catch (error) {
-      console.error('Error leaving room:', error);
-    }
   };
 
   const handleWeatherChange = useCallback(async (weather: 'sun' | 'rain' | 'night') => {
