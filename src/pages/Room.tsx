@@ -62,6 +62,11 @@ export default function Room() {
   const sendingRef = useRef<boolean>(false); // Prevent rapid double-sends
   const presenceChannelRef = useRef<any>(null);
   const presenceReadyRef = useRef(false);
+  // Gate: ensures the "you joined the room" system message fires at
+  // most once per channel lifetime, even when rename re-tracks presence
+  // and triggers another self-join event. Reset inside the presence
+  // effect on (re-)subscribe so switching rooms re-arms the announcement.
+  const hasAnnouncedSelfJoinRef = useRef(false);
   // Latest-value refs so the presence effect (keyed on roomId+userId only)
   // can read current username + messages without re-subscribing.
   const usernameRef = useRef(username);
@@ -169,6 +174,7 @@ export default function Room() {
 
     // Captured per-channel-instance state — reset on each (re-)subscribe.
     let initialSyncDone = false;
+    hasAnnouncedSelfJoinRef.current = false;
     const pendingLeaveTimers = new Map<string, number>();
 
     const channel = supabase.channel(`room-presence:${roomId}`, {
@@ -246,12 +252,22 @@ export default function Room() {
           pendingLeaveTimers.delete(p.user_id);
         }
 
+        // Self-announce: only the joiner writes their own "joined"
+        // message. Every other presence event is ignored for joins —
+        // simpler than designated-inserter, and always reliable.
+        if (p.user_id !== userId) continue;
+        // Rename re-tracks presence, which fires another self-join
+        // event. Mark the flag on the FIRST self-join we ever see on
+        // this channel (even if it arrives pre-sync and we skip the
+        // announcement) so a later rename-driven re-track can't be
+        // mistaken for the "first" self-join. The rename effect also
+        // pre-sets this ref before calling track(), closing any race
+        // in which Supabase emits the join event asynchronously.
+        if (hasAnnouncedSelfJoinRef.current) continue;
+        hasAnnouncedSelfJoinRef.current = true;
         // Post-initial-sync only. The initial sync fires a join event
         // for every existing member — we don't want to announce them.
         if (!initialSyncDone) continue;
-        // Self-announce: the joiner writes their own message. Simpler
-        // than designated-inserter for joins, and always reliable.
-        if (p.user_id !== userId) continue;
         if (recentlyAnnounced(p.user_id, 'joined')) continue;
 
         insertSystemMessage(p.user_id, p.username, `${p.username} joined the room`);
@@ -386,6 +402,11 @@ export default function Room() {
     if (!presenceReadyRef.current) return;
     const channel = presenceChannelRef.current;
     if (!channel) return;
+    // Suppress the fake self-join notification that a rename re-track
+    // would otherwise produce. By the time we reach this effect on a
+    // username change, the initial join (if any) has already fired —
+    // forcing the flag true here is safe and race-proof.
+    hasAnnouncedSelfJoinRef.current = true;
     channel.track({
       user_id: userId,
       username,

@@ -98,6 +98,8 @@ export function ChatSidebar({
   const [newName, setNewName] = useState(currentUsername);
   const [isTyping, setIsTyping] = useState(false);
 
+  const currentUserId = useMemo(() => getUserId(), []);
+
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const prevMessageCountRef = useRef(0);
   const isNearBottomRef = useRef(true);
@@ -119,20 +121,20 @@ export function ChatSidebar({
   // Defensive: guarantee the current user appears even if the `members` prop is
   // stale or empty (initial subscription lag, transient realtime disconnect).
   const sortedMembers = useMemo(() => {
-    const hasSelf = members.some((m) => m.username === currentUsername);
+    const hasSelf = members.some((m) => m.user_id === currentUserId);
     const base: RoomMember[] = hasSelf
       ? [...members]
       : [
           ...members,
           {
-            id: `self-${currentUsername}`,
-            user_id: getUserId(),
+            id: `self-${currentUserId}`,
+            user_id: currentUserId,
             username: currentUsername,
           },
         ];
     return base.sort((a, b) => {
-      if (a.username === currentUsername) return -1;
-      if (b.username === currentUsername) return 1;
+      if (a.user_id === currentUserId) return -1;
+      if (b.user_id === currentUserId) return 1;
       const ta = lastActivityByUser.get(a.user_id)?.ts;
       const tb = lastActivityByUser.get(b.user_id)?.ts;
       if (ta && tb) return tb.localeCompare(ta);
@@ -140,7 +142,7 @@ export function ChatSidebar({
       if (tb) return 1;
       return a.username.localeCompare(b.username);
     });
-  }, [members, currentUsername, lastActivityByUser]);
+  }, [members, currentUsername, currentUserId, lastActivityByUser]);
 
   const processedMessages = useMemo<ProcessedMessage[]>(() => {
     let prevDay = '';
@@ -148,7 +150,7 @@ export function ChatSidebar({
       const prevMsg = index > 0 ? messages[index - 1] : null;
       const isGrouped =
         prevMsg !== null &&
-        prevMsg.username === msg.username &&
+        prevMsg.user_id === msg.user_id &&
         prevMsg.message_type === 'chat' &&
         msg.message_type === 'chat' &&
         new Date(msg.created_at).getTime() - new Date(prevMsg.created_at).getTime() < 120_000;
@@ -162,11 +164,11 @@ export function ChatSidebar({
         formattedTime: formatMessageTime(msg.created_at),
         userColor: getUserColor(msg.user_id),
         isGrouped: isGrouped && !daySeparator,
-        isSelf: msg.username === currentUsername,
+        isSelf: msg.user_id === currentUserId,
         daySeparator,
       };
     });
-  }, [messages, currentUsername]);
+  }, [messages, currentUserId]);
 
   // Live-status tier derived from recency of the last chat message.
   // Drives both the dot color and the label ("LIVE NOW" vs "active Xm").
@@ -276,7 +278,7 @@ export function ChatSidebar({
     <div
       className={`chat-sidebar ${isOpen ? '' : 'chat-sidebar-closed'}`}
       aria-hidden={!isOpen}
-      {...(!isOpen ? { inert: '' as any } : {})}
+      inert={!isOpen}
     >
       {/* Brand header */}
       <header className="chat-header-pixel">
@@ -391,7 +393,7 @@ export function ChatSidebar({
 
         <div className="members-list">
           {sortedMembers.map((member) => {
-            const isSelf = member.username === currentUsername;
+            const isSelf = member.user_id === currentUserId;
             const color = getUserColor(member.user_id);
             const activity = lastActivityByUser.get(member.user_id);
             const justSpoke = activity

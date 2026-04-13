@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from './ui/button';
-import { SkipForward, Play, Pause, ChevronDown, Plus, ListMusic } from 'lucide-react';
+import { Play, Pause, ChevronDown, Plus, ListMusic } from 'lucide-react';
 import { Card } from './ui/card';
 import { YouTubeSearchTab } from './YouTubeSearchTab';
 import { VolumeControl } from './VolumeControl';
@@ -371,22 +371,6 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
               ) : (
                 <Play className="h-5 w-5" />
               )}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                if (isPlayingDefault) {
-                  const nextIndex = (currentDefaultIndex + 1) % DEFAULT_MUSIC.length;
-                  setCurrentDefaultIndex(nextIndex);
-                } else {
-                  onSkip();
-                }
-              }}
-              disabled={!currentSong && !isPlayingDefault && playlist.length === 0}
-              className="h-10 w-10"
-            >
-              <SkipForward className="h-5 w-5" />
             </Button>
           </div>
 
