@@ -3293,6 +3293,99 @@
 .msg-reaction-chip-emoji { font-size: 13px; line-height: 1; }
 .msg-reaction-chip-count { font-weight: 600; }
 
+/* Reactor list popover — shows who reacted with a given emoji */
+.msg-reactors-popover {
+  width: auto !important;
+  min-width: 200px;
+  max-width: 260px;
+  padding: 0 !important;
+  border: 2px solid var(--pixel-border) !important;
+  border-radius: 6px !important;
+  background: var(--pixel-bg-elevated) !important;
+  box-shadow: 2px 2px 0 0 var(--pixel-border-strong);
+  overflow: hidden;
+}
+.msg-reactors-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--pixel-border);
+  font-size: 11px;
+  color: var(--pixel-text-muted);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.msg-reactors-header-emoji { font-size: 16px; line-height: 1; }
+.msg-reactors-header-count {
+  font-weight: 600;
+  color: var(--pixel-text-primary);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.msg-reactors-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.msg-reactor-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--pixel-text-primary);
+}
+.msg-reactor-row-mine {
+  background: rgba(255, 154, 118, 0.08);
+}
+.msg-reactor-avatar {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  color: var(--pixel-text-primary);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.msg-reactor-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.msg-reactor-you {
+  color: var(--pixel-text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  margin-left: 4px;
+}
+.msg-reactor-remove {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: transparent;
+  color: var(--pixel-text-muted);
+  border: 1px solid var(--pixel-border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+}
+.msg-reactor-remove:hover {
+  color: var(--pixel-accent-peach);
+  border-color: var(--pixel-accent-peach);
+  background: rgba(255, 154, 118, 0.1);
+}
+
 /* ============================================
    Jumbo emoji (message is only 1–3 emoji)
    ============================================ */

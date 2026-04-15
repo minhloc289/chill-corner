@@ -89,6 +89,12 @@ export default function Room() {
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+  // Latest-value ref so handleReact can read the user's current reaction
+  // on a message without closing over stale state.
+  const reactionsRef = useRef<ReactionsByMessage>(reactionsByMessage);
+  useEffect(() => {
+    reactionsRef.current = reactionsByMessage;
+  }, [reactionsByMessage]);
 
   // Initialize or join room
   useEffect(() => {
@@ -621,6 +627,30 @@ export default function Room() {
       )
       .on(
         'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'message_reactions', filter: `room_id=eq.${roomIdParam}` },
+        (payload) => {
+          const r = payload.new as Reaction;
+          setReactionsByMessage((prev) => {
+            const list = prev[r.message_id] || [];
+            const idx = list.findIndex((x) => x.id === r.id);
+            if (idx === -1) {
+              // Row not yet in local state (e.g. arrived before initial
+              // fetch completed, or a temp-id placeholder for the same
+              // user hasn't been swapped yet). Drop any temp entry from
+              // this user and append the real one.
+              const withoutPending = list.filter(
+                (x) => !(x.id.startsWith('temp-') && x.user_id === r.user_id),
+              );
+              return { ...prev, [r.message_id]: [...withoutPending, r] };
+            }
+            const next = [...list];
+            next[idx] = r;
+            return { ...prev, [r.message_id]: next };
+          });
+        },
+      )
+      .on(
+        'postgres_changes',
         { event: 'DELETE', schema: 'public', table: 'message_reactions' },
         (payload) => {
           // DELETE events from Postgres do not include the full row by default —
@@ -979,6 +1009,14 @@ export default function Room() {
   const handleReact = useCallback(async (messageId: string, emoji: string) => {
     if (!roomId) return;
 
+    // Messenger rule: one reaction per (user, message). Picking a
+    // different emoji switches the existing row via an upsert on
+    // (message_id, user_id); clicking the same emoji is a no-op here
+    // (the caller should route that to onUnreact instead).
+    const existingList = reactionsRef.current[messageId] || [];
+    const existingMine = existingList.find((r) => r.user_id === userId);
+    if (existingMine?.emoji === emoji) return;
+
     const tempId = `temp-${Date.now()}-${Math.random()}`;
     const optimistic: Reaction = {
       id: tempId,
@@ -989,56 +1027,54 @@ export default function Room() {
       created_at: new Date().toISOString(),
     };
 
+    // Optimistic switch: drop the user's previous reaction (if any) and
+    // append the new optimistic one in one state write.
     setReactionsByMessage((prev) => {
-      const existing = prev[messageId] || [];
-      if (existing.some((r) => r.user_id === userId && r.emoji === emoji)) return prev;
-      return { ...prev, [messageId]: [...existing, optimistic] };
+      const list = prev[messageId] || [];
+      const withoutMine = list.filter((r) => r.user_id !== userId);
+      return { ...prev, [messageId]: [...withoutMine, optimistic] };
     });
 
     const { data, error } = await supabase
       .from('message_reactions')
-      .insert({
-        message_id: messageId,
-        room_id: roomId,
-        user_id: userId,
-        username,
-        emoji,
-      })
+      .upsert(
+        {
+          message_id: messageId,
+          room_id: roomId,
+          user_id: userId,
+          username,
+          emoji,
+        },
+        { onConflict: 'message_id,user_id' },
+      )
       .select('*')
       .single();
 
     if (error) {
-      // Roll back on hard failure. Unique-violation (23505) means someone
-      // else's realtime broadcast beat us to inserting the same row; that's
-      // not an error from the user's perspective — leave the optimistic
-      // entry and let the subscription handler swap in the real id.
-      if (error.code !== '23505') {
-        console.error('Error adding reaction:', error);
-        setReactionsByMessage((prev) => {
-          const existing = prev[messageId] || [];
-          const filtered = existing.filter((r) => r.id !== tempId);
-          if (filtered.length === existing.length) return prev;
-          if (filtered.length === 0) {
-            const { [messageId]: _, ...rest } = prev;
-            return rest;
-          }
-          return { ...prev, [messageId]: filtered };
-        });
-      }
+      console.error('Error switching reaction:', error);
+      // Roll back: drop the optimistic row; restore the prior reaction
+      // if there was one.
+      setReactionsByMessage((prev) => {
+        const list = prev[messageId] || [];
+        const withoutMine = list.filter((r) => r.user_id !== userId);
+        const restored = existingMine ? [...withoutMine, existingMine] : withoutMine;
+        if (restored.length === 0) {
+          const { [messageId]: _, ...rest } = prev;
+          return rest;
+        }
+        return { ...prev, [messageId]: restored };
+      });
       return;
     }
 
     if (data) {
       const real = data as Reaction;
       setReactionsByMessage((prev) => {
-        const existing = prev[messageId] || [];
-        if (existing.some((r) => r.id === real.id)) {
-          return { ...prev, [messageId]: existing.filter((r) => r.id !== tempId) };
-        }
-        return {
-          ...prev,
-          [messageId]: existing.map((r) => (r.id === tempId ? real : r)),
-        };
+        const list = prev[messageId] || [];
+        // Replace whatever the user currently has (temp or stale) with
+        // the server-authoritative row.
+        const withoutMine = list.filter((r) => r.user_id !== userId);
+        return { ...prev, [messageId]: [...withoutMine, real] };
       });
     }
   }, [roomId, userId, username]);

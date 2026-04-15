@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useLayoutEffect, memo, useCallback, useMemo, lazy, Suspense } from 'react';
-import type { EmojiClickData } from 'emoji-picker-react';
+import type { EmojiClickData, EmojiStyle } from 'emoji-picker-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Popover, PopoverTrigger, PopoverContent } from './ui/popover';
@@ -14,8 +14,11 @@ import {
 } from '@/lib/roomUtils';
 
 // Lazy-load the picker so the ~80 KB chunk only hits the network
-// when the user first opens the smiley popover.
-const EmojiPicker = lazy(() => import('emoji-picker-react'));
+// when the user first opens the smiley popover. `preloadEmojiPicker`
+// is called on smiley hover/focus to warm the chunk before click —
+// subsequent calls are no-ops because the module is already cached.
+const preloadEmojiPicker = () => import('emoji-picker-react');
+const EmojiPicker = lazy(preloadEmojiPicker);
 
 // Messenger's canonical reaction set — fixed, no picker needed.
 const QUICK_REACTIONS = ['❤️', '😆', '😮', '😢', '😡', '👍'] as const;
@@ -76,7 +79,7 @@ interface GroupedReaction {
   emoji: string;
   count: number;
   hasMine: boolean;
-  usernames: string[];
+  reactions: Reaction[];
 }
 
 const groupReactions = (reactions: Reaction[] | undefined, currentUserId: string): GroupedReaction[] => {
@@ -86,14 +89,14 @@ const groupReactions = (reactions: Reaction[] | undefined, currentUserId: string
     const existing = byEmoji.get(r.emoji);
     if (existing) {
       existing.count += 1;
-      existing.usernames.push(r.username);
+      existing.reactions.push(r);
       if (r.user_id === currentUserId) existing.hasMine = true;
     } else {
       byEmoji.set(r.emoji, {
         emoji: r.emoji,
         count: 1,
         hasMine: r.user_id === currentUserId,
-        usernames: [r.username],
+        reactions: [r],
       });
     }
   }
@@ -110,6 +113,9 @@ interface MessageItemProps {
 
 const MessageItem = memo(({ msg, reactions, currentUserId, onReact, onUnreact }: MessageItemProps) => {
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // Only one reactor-list popover at a time per message — track which
+  // emoji's list is open (or null when nothing is open).
+  const [openEmoji, setOpenEmoji] = useState<string | null>(null);
 
   if (msg.message_type === 'system') {
     const { Icon, cls } = systemIconFor(msg.message);
@@ -123,9 +129,9 @@ const MessageItem = memo(({ msg, reactions, currentUserId, onReact, onUnreact }:
 
   const groupedReactions = groupReactions(reactions, currentUserId);
 
-  const handleChipClick = (emoji: string, hasMine: boolean) => {
-    if (hasMine) onUnreact(msg.id, emoji);
-    else onReact(msg.id, emoji);
+  const handleRemoveMine = (emoji: string) => {
+    onUnreact(msg.id, emoji);
+    setOpenEmoji(null);
   };
 
   const handlePalettePick = (emoji: string) => {
@@ -195,17 +201,67 @@ const MessageItem = memo(({ msg, reactions, currentUserId, onReact, onUnreact }:
         {groupedReactions.length > 0 && (
           <div className="msg-reactions-row">
             {groupedReactions.map((g) => (
-              <button
+              <Popover
                 key={g.emoji}
-                type="button"
-                className={`msg-reaction-chip ${g.hasMine ? 'is-mine' : ''}`}
-                onClick={() => handleChipClick(g.emoji, g.hasMine)}
-                title={g.usernames.join(', ')}
-                aria-label={`${g.count} ${g.emoji} reaction${g.count > 1 ? 's' : ''}`}
+                open={openEmoji === g.emoji}
+                onOpenChange={(open) => setOpenEmoji(open ? g.emoji : null)}
               >
-                <span className="msg-reaction-chip-emoji">{g.emoji}</span>
-                <span className="msg-reaction-chip-count">{g.count}</span>
-              </button>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className={`msg-reaction-chip ${g.hasMine ? 'is-mine' : ''}`}
+                    aria-label={`${g.count} ${g.emoji} reaction${g.count > 1 ? 's' : ''} — click to see who`}
+                  >
+                    <span className="msg-reaction-chip-emoji">{g.emoji}</span>
+                    <span className="msg-reaction-chip-count">{g.count}</span>
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  className="msg-reactors-popover"
+                  side="top"
+                  align={msg.isSelf ? 'end' : 'start'}
+                  sideOffset={6}
+                >
+                  <div className="msg-reactors-header">
+                    <span className="msg-reactors-header-emoji">{g.emoji}</span>
+                    <span className="msg-reactors-header-count">
+                      {g.count} reaction{g.count === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  <ul className="msg-reactors-list">
+                    {g.reactions.map((r) => {
+                      const mine = r.user_id === currentUserId;
+                      return (
+                        <li
+                          key={r.id}
+                          className={`msg-reactor-row ${mine ? 'msg-reactor-row-mine' : ''}`}
+                        >
+                          <span
+                            className="msg-reactor-avatar"
+                            style={{ backgroundColor: getUserColor(r.user_id) }}
+                          >
+                            {r.username[0].toUpperCase()}
+                          </span>
+                          <span className="msg-reactor-name">
+                            {r.username}
+                            {mine && <span className="msg-reactor-you"> (you)</span>}
+                          </span>
+                          {mine && (
+                            <button
+                              type="button"
+                              className="msg-reactor-remove"
+                              onClick={() => handleRemoveMine(g.emoji)}
+                              aria-label="Remove your reaction"
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </PopoverContent>
+              </Popover>
             ))}
           </div>
         )}
@@ -675,6 +731,8 @@ export function ChatSidebar({
                 className="chat-emoji-btn"
                 aria-label="Open emoji picker"
                 title="Emoji"
+                onMouseEnter={preloadEmojiPicker}
+                onFocus={preloadEmojiPicker}
               >
                 <Smile className="h-4 w-4" />
               </button>
@@ -690,8 +748,10 @@ export function ChatSidebar({
                   onEmojiClick={insertEmoji}
                   autoFocusSearch={false}
                   lazyLoadEmojis
+                  emojiStyle={'native' as EmojiStyle}
+                  previewConfig={{ showPreview: false }}
                   width={320}
-                  height={380}
+                  height={360}
                 />
               </Suspense>
             </PopoverContent>
