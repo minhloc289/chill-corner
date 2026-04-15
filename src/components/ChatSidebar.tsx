@@ -3,7 +3,7 @@ import type { EmojiClickData, EmojiStyle } from 'emoji-picker-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Popover, PopoverTrigger, PopoverContent } from './ui/popover';
-import { Send, Check, X, LogIn, LogOut, Sparkles, PenLine, Pencil, Smile, SmilePlus } from 'lucide-react';
+import { Send, Check, X, LogIn, LogOut, Sparkles, PenLine, Pencil, Smile, SmilePlus, Reply, CornerUpLeft } from 'lucide-react';
 import {
   getUserColor,
   getUserId,
@@ -30,6 +30,9 @@ interface Message {
   message: string;
   message_type: 'chat' | 'system';
   created_at: string;
+  reply_to_id?: string | null;
+  reply_to_username?: string | null;
+  reply_to_message?: string | null;
 }
 
 interface RoomMember {
@@ -52,7 +55,7 @@ interface ChatSidebarProps {
   members: RoomMember[];
   currentUsername: string;
   reactionsByMessage: Record<string, Reaction[]>;
-  onSendMessage: (message: string) => void;
+  onSendMessage: (message: string, replyTo: Message | null) => void;
   onRename: (newName: string) => void;
   onReact: (messageId: string, emoji: string) => void;
   onUnreact: (messageId: string, emoji: string) => void;
@@ -109,9 +112,11 @@ interface MessageItemProps {
   currentUserId: string;
   onReact: (messageId: string, emoji: string) => void;
   onUnreact: (messageId: string, emoji: string) => void;
+  onReplyRequest: (msg: Message) => void;
+  onJumpToMessage: (messageId: string) => void;
 }
 
-const MessageItem = memo(({ msg, reactions, currentUserId, onReact, onUnreact }: MessageItemProps) => {
+const MessageItem = memo(({ msg, reactions, currentUserId, onReact, onUnreact, onReplyRequest, onJumpToMessage }: MessageItemProps) => {
   const [paletteOpen, setPaletteOpen] = useState(false);
   // Only one reactor-list popover at a time per message — track which
   // emoji's list is open (or null when nothing is open).
@@ -157,6 +162,21 @@ const MessageItem = memo(({ msg, reactions, currentUserId, onReact, onUnreact }:
       {!msg.isSelf && msg.isGrouped && <div className="msg-avatar-spacer" />}
 
       <div className="msg-bubble-wrap">
+        {(msg.reply_to_id || msg.reply_to_message) && msg.reply_to_username && (
+          <button
+            type="button"
+            className="msg-reply-quote"
+            onClick={() => msg.reply_to_id && onJumpToMessage(msg.reply_to_id)}
+            title={msg.reply_to_id ? `Jump to ${msg.reply_to_username}'s message` : 'Original is no longer in view'}
+            disabled={!msg.reply_to_id}
+          >
+            <span className="msg-reply-quote-header">
+              <CornerUpLeft className="msg-reply-quote-icon" />
+              <span className="msg-reply-quote-name">{msg.reply_to_username}</span>
+            </span>
+            <span className="msg-reply-quote-snippet">{msg.reply_to_message}</span>
+          </button>
+        )}
         <div className="msg-bubble-and-react">
           <div className={bubbleClass}>
             {!msg.isJumbo && !msg.isSelf && !msg.isGrouped && (
@@ -164,39 +184,50 @@ const MessageItem = memo(({ msg, reactions, currentUserId, onReact, onUnreact }:
             )}
             <span className="msg-bubble-text">{msg.message}</span>
           </div>
-          <Popover open={paletteOpen} onOpenChange={setPaletteOpen}>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                className="msg-react-btn"
-                aria-label="Add reaction"
-                title="Add reaction"
-              >
-                <SmilePlus className="h-3.5 w-3.5" />
-              </button>
-            </PopoverTrigger>
-            <PopoverContent
-              className="msg-react-palette"
-              side="top"
-              align={msg.isSelf ? 'end' : 'start'}
-              sideOffset={6}
+          <div className="msg-actions-group">
+            <button
+              type="button"
+              className="msg-action-btn msg-reply-btn"
+              onClick={() => onReplyRequest(msg)}
+              aria-label="Reply"
+              title="Reply"
             >
-              {QUICK_REACTIONS.map((emoji) => {
-                const mine = groupedReactions.find((g) => g.emoji === emoji)?.hasMine ?? false;
-                return (
-                  <button
-                    key={emoji}
-                    type="button"
-                    className={`msg-react-palette-btn ${mine ? 'is-mine' : ''}`}
-                    onClick={() => handlePalettePick(emoji)}
-                    aria-label={`React with ${emoji}`}
-                  >
-                    {emoji}
-                  </button>
-                );
-              })}
-            </PopoverContent>
-          </Popover>
+              <Reply className="h-3.5 w-3.5" />
+            </button>
+            <Popover open={paletteOpen} onOpenChange={setPaletteOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="msg-action-btn msg-react-btn"
+                  aria-label="Add reaction"
+                  title="Add reaction"
+                >
+                  <SmilePlus className="h-3.5 w-3.5" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="msg-react-palette"
+                side="top"
+                align={msg.isSelf ? 'end' : 'start'}
+                sideOffset={6}
+              >
+                {QUICK_REACTIONS.map((emoji) => {
+                  const mine = groupedReactions.find((g) => g.emoji === emoji)?.hasMine ?? false;
+                  return (
+                    <button
+                      key={emoji}
+                      type="button"
+                      className={`msg-react-palette-btn ${mine ? 'is-mine' : ''}`}
+                      onClick={() => handlePalettePick(emoji)}
+                      aria-label={`React with ${emoji}`}
+                    >
+                      {emoji}
+                    </button>
+                  );
+                })}
+              </PopoverContent>
+            </Popover>
+          </div>
         </div>
         {groupedReactions.length > 0 && (
           <div className="msg-reactions-row">
@@ -288,6 +319,7 @@ export function ChatSidebar({
   const [newName, setNewName] = useState(currentUsername);
   const [isTyping, setIsTyping] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
 
   const currentUserId = useMemo(() => getUserId(), []);
 
@@ -341,11 +373,13 @@ export function ChatSidebar({
     let prevDay = '';
     return messages.map((msg, index) => {
       const prevMsg = index > 0 ? messages[index - 1] : null;
+      const hasReply = !!msg.reply_to_id || !!msg.reply_to_message;
       const isGrouped =
         prevMsg !== null &&
         prevMsg.user_id === msg.user_id &&
         prevMsg.message_type === 'chat' &&
         msg.message_type === 'chat' &&
+        !hasReply &&
         new Date(msg.created_at).getTime() - new Date(prevMsg.created_at).getTime() < 120_000;
 
       const day = formatDateSeparator(msg.created_at);
@@ -358,7 +392,8 @@ export function ChatSidebar({
         userColor: getUserColor(msg.user_id),
         isGrouped: isGrouped && !daySeparator,
         isSelf: msg.user_id === currentUserId,
-        isJumbo: msg.message_type === 'chat' && isJumboEmojiMessage(msg.message),
+        // Quote cards own the visual weight — don't also jumbo-ify the text.
+        isJumbo: !hasReply && msg.message_type === 'chat' && isJumboEmojiMessage(msg.message),
         daySeparator,
       };
     });
@@ -499,10 +534,35 @@ export function ChatSidebar({
   const handleSendMessage = useCallback(() => {
     if (!messageText.trim()) return;
     justSentRef.current = true;
-    onSendMessage(messageText);
+    onSendMessage(messageText, replyTo);
     setMessageText('');
+    setReplyTo(null);
     setIsTyping(false);
-  }, [messageText, onSendMessage]);
+  }, [messageText, onSendMessage, replyTo]);
+
+  const handleReplyRequest = useCallback((target: Message) => {
+    setReplyTo(target);
+    // Focus the input on the next frame so the keyboard is ready.
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, []);
+
+  // Scroll the quoted parent into view and briefly flash it. No-op if
+  // the parent has rolled off the 50-message window (the quote card
+  // still renders from the denormalized snapshot).
+  const jumpToMessage = useCallback((messageId: string) => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const target = container.querySelector<HTMLElement>(`[data-message-id="${messageId}"]`);
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const row = target.querySelector<HTMLElement>('.msg-row') ?? target;
+    row.classList.remove('msg-row-flash');
+    // Force a reflow so the animation can replay if the same target
+    // is clicked twice in a row.
+    void row.offsetWidth;
+    row.classList.add('msg-row-flash');
+    window.setTimeout(() => row.classList.remove('msg-row-flash'), 1300);
+  }, []);
 
   const insertEmoji = useCallback((emojiData: EmojiClickData) => {
     const emoji = emojiData.emoji;
@@ -698,7 +758,7 @@ export function ChatSidebar({
               </div>
             )}
             {processedMessages.map((msg) => (
-              <div key={msg.id}>
+              <div key={msg.id} data-message-id={msg.id}>
                 {msg.daySeparator && (
                   <div className="date-separator" aria-label={msg.daySeparator}>
                     <span className="date-separator-chip">{msg.daySeparator}</span>
@@ -710,6 +770,8 @@ export function ChatSidebar({
                   currentUserId={currentUserId}
                   onReact={onReact}
                   onUnreact={onUnreact}
+                  onReplyRequest={handleReplyRequest}
+                  onJumpToMessage={jumpToMessage}
                 />
               </div>
             ))}
@@ -723,6 +785,32 @@ export function ChatSidebar({
         <div className="chat-composer-typing" aria-live="polite">
           {isTyping ? 'pressing keys…' : ''}
         </div>
+        {replyTo && (
+          <div className="chat-reply-banner" role="status">
+            <div className="chat-reply-banner-accent" />
+            <div className="chat-reply-banner-body">
+              <div className="chat-reply-banner-label">
+                Replying to{' '}
+                <span
+                  className="chat-reply-banner-name"
+                  style={{ color: getUserColor(replyTo.user_id) }}
+                >
+                  {replyTo.user_id === currentUserId ? 'yourself' : replyTo.username}
+                </span>
+              </div>
+              <div className="chat-reply-banner-snippet">{replyTo.message}</div>
+            </div>
+            <button
+              type="button"
+              className="chat-reply-banner-close"
+              onClick={() => setReplyTo(null)}
+              aria-label="Cancel reply"
+              title="Cancel reply (Esc)"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
         <div className="chat-input-wrapper">
           <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
             <PopoverTrigger asChild>
@@ -766,6 +854,9 @@ export function ChatSidebar({
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 handleSendMessage();
+              } else if (e.key === 'Escape' && replyTo) {
+                e.preventDefault();
+                setReplyTo(null);
               }
             }}
             className="chat-input-field"

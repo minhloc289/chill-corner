@@ -31,6 +31,9 @@ interface Message {
   message: string;
   message_type: 'chat' | 'system';
   created_at: string;
+  reply_to_id?: string | null;
+  reply_to_username?: string | null;
+  reply_to_message?: string | null;
 }
 
 interface RoomMember {
@@ -954,12 +957,26 @@ export default function Room() {
     }
   }, [roomId]);
 
-  const handleSendMessage = useCallback(async (message: string) => {
+  const handleSendMessage = useCallback(async (message: string, replyTo: Message | null) => {
     if (!roomId) return;
 
     // Prevent rapid double-sends
     if (sendingRef.current) return;
     sendingRef.current = true;
+
+    // Denormalized reply snapshot: the chip must render even if the
+    // parent rolls off the 50-message window later.
+    const replyFields = replyTo
+      ? {
+          reply_to_id: replyTo.id,
+          reply_to_username: replyTo.username,
+          reply_to_message: replyTo.message,
+        }
+      : {
+          reply_to_id: null,
+          reply_to_username: null,
+          reply_to_message: null,
+        };
 
     // Optimistic update: show message instantly with temp ID
     const tempId = `temp-${Date.now()}-${Math.random()}`;
@@ -970,6 +987,7 @@ export default function Room() {
       message,
       message_type: 'chat',
       created_at: new Date().toISOString(),
+      ...replyFields,
     };
 
     setMessages(prev => [...prev, optimisticMessage].slice(-50));
@@ -983,6 +1001,7 @@ export default function Room() {
           username,
           message,
           message_type: 'chat',
+          ...replyFields,
         })
         .select('id')
         .single();
