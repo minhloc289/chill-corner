@@ -3,7 +3,7 @@ import type { EmojiClickData, EmojiStyle } from 'emoji-picker-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Popover, PopoverTrigger, PopoverContent } from './ui/popover';
-import { Send, Check, X, LogIn, LogOut, Sparkles, PenLine, Pencil, Smile, SmilePlus, Reply, CornerUpLeft } from 'lucide-react';
+import { Send, Check, X, LogIn, LogOut, Sparkles, PenLine, Pencil, Smile, SmilePlus, Reply, CornerUpLeft, Zap } from 'lucide-react';
 import {
   getUserColor,
   getUserId,
@@ -11,6 +11,7 @@ import {
   formatRelativeTime,
   formatDateSeparator,
   isJumboEmojiMessage,
+  playBuzzSound,
 } from '@/lib/roomUtils';
 
 // Lazy-load the picker so the ~80 KB chunk only hits the network
@@ -28,12 +29,15 @@ interface Message {
   user_id: string;
   username: string;
   message: string;
-  message_type: 'chat' | 'system';
+  message_type: 'chat' | 'system' | 'buzz';
   created_at: string;
   reply_to_id?: string | null;
   reply_to_username?: string | null;
   reply_to_message?: string | null;
 }
+
+const BUZZ_COOLDOWN_MS = 5000;
+const BUZZ_FRESHNESS_MS = 5000;
 
 interface RoomMember {
   id: string;
@@ -59,6 +63,7 @@ interface ChatSidebarProps {
   onRename: (newName: string) => void;
   onReact: (messageId: string, emoji: string) => void;
   onUnreact: (messageId: string, emoji: string) => void;
+  onBuzz: () => void | Promise<void>;
   isOpen: boolean;
 }
 
@@ -128,6 +133,18 @@ const MessageItem = memo(({ msg, reactions, currentUserId, onReact, onUnreact, o
       <div className="message message-system">
         <Icon className={`sys-lucide ${cls}`} />
         <span className="message-text-system">{msg.message}</span>
+      </div>
+    );
+  }
+
+  if (msg.message_type === 'buzz') {
+    return (
+      <div className="message message-buzz" role="status">
+        <Zap className="message-buzz-icon" />
+        <span className="message-buzz-text">
+          <strong style={{ color: msg.userColor }}>{msg.username}</strong>
+          {' buzzed the room!'}
+        </span>
       </div>
     );
   }
@@ -312,6 +329,7 @@ export function ChatSidebar({
   onRename,
   onReact,
   onUnreact,
+  onBuzz,
   isOpen,
 }: ChatSidebarProps) {
   const [messageText, setMessageText] = useState('');
@@ -320,6 +338,9 @@ export function ChatSidebar({
   const [isTyping, setIsTyping] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [buzzCooldown, setBuzzCooldown] = useState(0);
+  const buzzCooldownTimerRef = useRef<number | null>(null);
+  const reactedBuzzIdsRef = useRef<Set<string>>(new Set());
 
   const currentUserId = useMemo(() => getUserId(), []);
 
@@ -539,6 +560,60 @@ export function ChatSidebar({
     setReplyTo(null);
     setIsTyping(false);
   }, [messageText, onSendMessage, replyTo]);
+
+  const handleBuzzClick = useCallback(() => {
+    if (Date.now() < buzzCooldown) return;
+    const nextReady = Date.now() + BUZZ_COOLDOWN_MS;
+    setBuzzCooldown(nextReady);
+    if (buzzCooldownTimerRef.current) window.clearTimeout(buzzCooldownTimerRef.current);
+    buzzCooldownTimerRef.current = window.setTimeout(() => setBuzzCooldown(0), BUZZ_COOLDOWN_MS);
+    void onBuzz();
+  }, [buzzCooldown, onBuzz]);
+
+  // Ctrl+G / Cmd+G → buzz, matching Yahoo! Messenger's muscle memory.
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'g' || e.key === 'G')) {
+        e.preventDefault();
+        handleBuzzClick();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isOpen, handleBuzzClick]);
+
+  useEffect(() => () => {
+    if (buzzCooldownTimerRef.current) window.clearTimeout(buzzCooldownTimerRef.current);
+  }, []);
+
+  // Receive buzzes: detect new buzz messages from other users and shake
+  // the room + play a buzzer. Freshness gate (5 s) prevents the initial
+  // 50-message replay from re-triggering shakes for historical buzzes.
+  useEffect(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.message_type !== 'buzz') continue;
+      if (m.user_id === currentUserId) continue;
+      if (reactedBuzzIdsRef.current.has(m.id)) return;
+      reactedBuzzIdsRef.current.add(m.id);
+      const age = Date.now() - new Date(m.created_at).getTime();
+      if (age > BUZZ_FRESHNESS_MS) return;
+
+      const reducedMotion = typeof window.matchMedia === 'function'
+        && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const room = document.querySelector<HTMLElement>('.room-page');
+      if (room && !reducedMotion) {
+        room.classList.remove('room-buzzing');
+        // Force reflow so a second buzz in quick succession replays cleanly.
+        void room.offsetWidth;
+        room.classList.add('room-buzzing');
+        window.setTimeout(() => room.classList.remove('room-buzzing'), 900);
+      }
+      playBuzzSound();
+      return;
+    }
+  }, [messages, currentUserId]);
 
   const handleReplyRequest = useCallback((target: Message) => {
     setReplyTo(target);
@@ -862,6 +937,16 @@ export function ChatSidebar({
             className="chat-input-field"
             aria-label="Message input"
           />
+          <button
+            type="button"
+            className={`chat-buzz-btn ${buzzCooldown > 0 ? 'is-cooling' : ''}`}
+            onClick={handleBuzzClick}
+            disabled={buzzCooldown > 0}
+            aria-label="Buzz the room"
+            title={buzzCooldown > 0 ? 'Cooling down…' : 'Buzz the room (Ctrl+G)'}
+          >
+            <Zap className="h-4 w-4" />
+          </button>
           <Button
             onClick={handleSendMessage}
             size="icon"

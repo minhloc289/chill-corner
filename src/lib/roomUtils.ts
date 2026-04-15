@@ -47,6 +47,45 @@ export function generateRoomId(): string {
   return Math.random().toString(36).substr(2, 8);
 }
 
+// Yahoo! Messenger Buzz sound — a short square-wave buzzer that sweeps
+// 180Hz → 110Hz with an amplitude envelope. Uses a single lazy-created
+// AudioContext shared across calls so we don't burn through a new one
+// each buzz. Returns silently if audio is unavailable or the browser
+// refuses to resume from a suspended state (pre-gesture tabs).
+let buzzAudioContext: AudioContext | null = null;
+export function playBuzzSound(): void {
+  try {
+    const Ctx = (window.AudioContext
+      || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext);
+    if (!Ctx) return;
+    if (!buzzAudioContext) buzzAudioContext = new Ctx();
+    const ctx = buzzAudioContext;
+    if (ctx.state === 'suspended') ctx.resume().catch(() => { /* noop */ });
+
+    const reducedMotion = typeof window.matchMedia === 'function'
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const now = ctx.currentTime;
+    const duration = reducedMotion ? 0.18 : 0.42;
+    const peakGain = reducedMotion ? 0.12 : 0.28;
+
+    const osc = ctx.createOscillator();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(180, now);
+    osc.frequency.exponentialRampToValueAtTime(110, now + duration);
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(peakGain, now + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + duration + 0.02);
+  } catch {
+    /* noop — audio is a nice-to-have, never a blocker */
+  }
+}
+
 // Pastel palette — all values contrast-check against warm-ink (#3b2f2a) text.
 const PASTEL_USER_COLORS = [
   '#ff9a76', '#7dc8ff', '#ffd76a', '#6ec1a7', '#ff7a93',

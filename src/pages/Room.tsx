@@ -29,7 +29,7 @@ interface Message {
   user_id: string;
   username: string;
   message: string;
-  message_type: 'chat' | 'system';
+  message_type: 'chat' | 'system' | 'buzz';
   created_at: string;
   reply_to_id?: string | null;
   reply_to_username?: string | null;
@@ -1133,6 +1133,20 @@ export default function Room() {
     }
   }, [userId]);
 
+  const handleBuzz = useCallback(async () => {
+    if (!roomId) return;
+    // Insert with no optimistic entry — the sender shouldn't shake
+    // themselves, and the realtime echo will populate the log quickly.
+    const { error } = await supabase.from('messages').insert({
+      room_id: roomId,
+      user_id: userId,
+      username,
+      message: `${username} buzzed the room`,
+      message_type: 'buzz',
+    });
+    if (error) console.error('Error sending buzz:', error);
+  }, [roomId, userId, username]);
+
   const handleRename = useCallback(async (newName: string) => {
     if (!roomId) return;
 
@@ -1204,6 +1218,7 @@ export default function Room() {
         onRename={handleRename}
         onReact={handleReact}
         onUnreact={handleUnreact}
+        onBuzz={handleBuzz}
         isOpen={isChatOpen}
       />
     </div>
