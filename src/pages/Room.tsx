@@ -39,6 +39,17 @@ interface RoomMember {
   username: string;
 }
 
+interface Reaction {
+  id: string;
+  message_id: string;
+  user_id: string;
+  username: string;
+  emoji: string;
+  created_at: string;
+}
+
+export type ReactionsByMessage = Record<string, Reaction[]>;
+
 export default function Room() {
   const { roomId } = useParams<{ roomId?: string }>();
   const navigate = useNavigate();
@@ -48,6 +59,7 @@ export default function Room() {
   const [playlist, setPlaylist] = useState<Song[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [members, setMembers] = useState<RoomMember[]>([]);
+  const [reactionsByMessage, setReactionsByMessage] = useState<ReactionsByMessage>({});
   const [loading, setLoading] = useState(true);
   const [isChatOpen, setIsChatOpen] = useState(() => {
     const saved = localStorage.getItem('chill-room-chat-open');
@@ -131,6 +143,7 @@ export default function Room() {
         await Promise.all([
           loadPlaylist(currentRoomId),
           loadMessages(currentRoomId),
+          loadReactions(currentRoomId),
         ]);
 
 
@@ -464,6 +477,25 @@ export default function Room() {
     setMessages(loadedMessages);
   };
 
+  const loadReactions = async (roomIdParam: string) => {
+    const { data, error } = await supabase
+      .from('message_reactions')
+      .select('*')
+      .eq('room_id', roomIdParam)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error('Error loading reactions:', error);
+      return;
+    }
+
+    const grouped: ReactionsByMessage = {};
+    for (const r of (data || []) as Reaction[]) {
+      (grouped[r.message_id] ||= []).push(r);
+    }
+    setReactionsByMessage(grouped);
+  };
+
   // Normalize playlist positions to be sequential (0, 1, 2, ...)
   const normalizePlaylistPositions = async (roomIdParam: string) => {
     const { data: songs, error: fetchError } = await supabase
@@ -569,6 +601,43 @@ export default function Room() {
             return updated;
           });
         }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'message_reactions', filter: `room_id=eq.${roomIdParam}` },
+        (payload) => {
+          const r = payload.new as Reaction;
+          setReactionsByMessage((prev) => {
+            const existing = prev[r.message_id] || [];
+            // Dedupe: same id (realtime echo of our own insert), or same
+            // (user_id, emoji) tuple (realtime arriving after optimistic add).
+            if (existing.some((x) => x.id === r.id)) return prev;
+            const withoutPending = existing.filter(
+              (x) => !(x.id.startsWith('temp-') && x.user_id === r.user_id && x.emoji === r.emoji),
+            );
+            return { ...prev, [r.message_id]: [...withoutPending, r] };
+          });
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'message_reactions' },
+        (payload) => {
+          // DELETE events from Postgres do not include the full row by default —
+          // only the primary key. Strip by id across the whole map.
+          const oldId = (payload.old as { id?: string } | null)?.id;
+          if (!oldId) return;
+          setReactionsByMessage((prev) => {
+            let changed = false;
+            const next: ReactionsByMessage = {};
+            for (const [mid, list] of Object.entries(prev)) {
+              const filtered = list.filter((r) => r.id !== oldId);
+              if (filtered.length !== list.length) changed = true;
+              if (filtered.length) next[mid] = filtered;
+            }
+            return changed ? next : prev;
+          });
+        },
       )
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
@@ -907,6 +976,108 @@ export default function Room() {
     }
   }, [roomId, userId, username]);
 
+  const handleReact = useCallback(async (messageId: string, emoji: string) => {
+    if (!roomId) return;
+
+    const tempId = `temp-${Date.now()}-${Math.random()}`;
+    const optimistic: Reaction = {
+      id: tempId,
+      message_id: messageId,
+      user_id: userId,
+      username,
+      emoji,
+      created_at: new Date().toISOString(),
+    };
+
+    setReactionsByMessage((prev) => {
+      const existing = prev[messageId] || [];
+      if (existing.some((r) => r.user_id === userId && r.emoji === emoji)) return prev;
+      return { ...prev, [messageId]: [...existing, optimistic] };
+    });
+
+    const { data, error } = await supabase
+      .from('message_reactions')
+      .insert({
+        message_id: messageId,
+        room_id: roomId,
+        user_id: userId,
+        username,
+        emoji,
+      })
+      .select('*')
+      .single();
+
+    if (error) {
+      // Roll back on hard failure. Unique-violation (23505) means someone
+      // else's realtime broadcast beat us to inserting the same row; that's
+      // not an error from the user's perspective — leave the optimistic
+      // entry and let the subscription handler swap in the real id.
+      if (error.code !== '23505') {
+        console.error('Error adding reaction:', error);
+        setReactionsByMessage((prev) => {
+          const existing = prev[messageId] || [];
+          const filtered = existing.filter((r) => r.id !== tempId);
+          if (filtered.length === existing.length) return prev;
+          if (filtered.length === 0) {
+            const { [messageId]: _, ...rest } = prev;
+            return rest;
+          }
+          return { ...prev, [messageId]: filtered };
+        });
+      }
+      return;
+    }
+
+    if (data) {
+      const real = data as Reaction;
+      setReactionsByMessage((prev) => {
+        const existing = prev[messageId] || [];
+        if (existing.some((r) => r.id === real.id)) {
+          return { ...prev, [messageId]: existing.filter((r) => r.id !== tempId) };
+        }
+        return {
+          ...prev,
+          [messageId]: existing.map((r) => (r.id === tempId ? real : r)),
+        };
+      });
+    }
+  }, [roomId, userId, username]);
+
+  const handleUnreact = useCallback(async (messageId: string, emoji: string) => {
+    let removed: Reaction | undefined;
+    setReactionsByMessage((prev) => {
+      const existing = prev[messageId] || [];
+      removed = existing.find((r) => r.user_id === userId && r.emoji === emoji);
+      if (!removed) return prev;
+      const filtered = existing.filter((r) => r !== removed);
+      if (filtered.length === 0) {
+        const { [messageId]: _, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [messageId]: filtered };
+    });
+
+    if (!removed) return;
+
+    const { error } = await supabase
+      .from('message_reactions')
+      .delete()
+      .eq('message_id', messageId)
+      .eq('user_id', userId)
+      .eq('emoji', emoji);
+
+    if (error) {
+      console.error('Error removing reaction:', error);
+      // Restore on failure.
+      const restore = removed;
+      setReactionsByMessage((prev) => {
+        const existing = prev[messageId] || [];
+        if (existing.some((r) => r.id === restore.id)) return prev;
+        return { ...prev, [messageId]: [...existing, restore] };
+      });
+    }
+  }, [userId]);
+
   const handleRename = useCallback(async (newName: string) => {
     if (!roomId) return;
 
@@ -973,8 +1144,11 @@ export default function Room() {
         messages={messages}
         members={members}
         currentUsername={username}
+        reactionsByMessage={reactionsByMessage}
         onSendMessage={handleSendMessage}
         onRename={handleRename}
+        onReact={handleReact}
+        onUnreact={handleUnreact}
         isOpen={isChatOpen}
       />
     </div>

@@ -1,14 +1,24 @@
-import { useState, useEffect, useRef, useLayoutEffect, memo, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect, memo, useCallback, useMemo, lazy, Suspense } from 'react';
+import type { EmojiClickData } from 'emoji-picker-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { Send, Check, X, LogIn, LogOut, Sparkles, PenLine, Pencil } from 'lucide-react';
+import { Popover, PopoverTrigger, PopoverContent } from './ui/popover';
+import { Send, Check, X, LogIn, LogOut, Sparkles, PenLine, Pencil, Smile, SmilePlus } from 'lucide-react';
 import {
   getUserColor,
   getUserId,
   formatMessageTime,
   formatRelativeTime,
   formatDateSeparator,
+  isJumboEmojiMessage,
 } from '@/lib/roomUtils';
+
+// Lazy-load the picker so the ~80 KB chunk only hits the network
+// when the user first opens the smiley popover.
+const EmojiPicker = lazy(() => import('emoji-picker-react'));
+
+// Messenger's canonical reaction set — fixed, no picker needed.
+const QUICK_REACTIONS = ['❤️', '😆', '😮', '😢', '😡', '👍'] as const;
 
 interface Message {
   id: string;
@@ -25,12 +35,24 @@ interface RoomMember {
   username: string;
 }
 
+interface Reaction {
+  id: string;
+  message_id: string;
+  user_id: string;
+  username: string;
+  emoji: string;
+  created_at: string;
+}
+
 interface ChatSidebarProps {
   messages: Message[];
   members: RoomMember[];
   currentUsername: string;
+  reactionsByMessage: Record<string, Reaction[]>;
   onSendMessage: (message: string) => void;
   onRename: (newName: string) => void;
+  onReact: (messageId: string, emoji: string) => void;
+  onUnreact: (messageId: string, emoji: string) => void;
   isOpen: boolean;
 }
 
@@ -39,6 +61,7 @@ interface ProcessedMessage extends Message {
   userColor: string;
   isGrouped: boolean;
   isSelf: boolean;
+  isJumbo: boolean;
   daySeparator: string | null;
 }
 
@@ -49,7 +72,45 @@ const systemIconFor = (message: string) => {
   return { Icon: Sparkles, cls: 'sys-color-default' };
 };
 
-const MessageItem = memo(({ msg }: { msg: ProcessedMessage }) => {
+interface GroupedReaction {
+  emoji: string;
+  count: number;
+  hasMine: boolean;
+  usernames: string[];
+}
+
+const groupReactions = (reactions: Reaction[] | undefined, currentUserId: string): GroupedReaction[] => {
+  if (!reactions || reactions.length === 0) return [];
+  const byEmoji = new Map<string, GroupedReaction>();
+  for (const r of reactions) {
+    const existing = byEmoji.get(r.emoji);
+    if (existing) {
+      existing.count += 1;
+      existing.usernames.push(r.username);
+      if (r.user_id === currentUserId) existing.hasMine = true;
+    } else {
+      byEmoji.set(r.emoji, {
+        emoji: r.emoji,
+        count: 1,
+        hasMine: r.user_id === currentUserId,
+        usernames: [r.username],
+      });
+    }
+  }
+  return Array.from(byEmoji.values());
+};
+
+interface MessageItemProps {
+  msg: ProcessedMessage;
+  reactions: Reaction[] | undefined;
+  currentUserId: string;
+  onReact: (messageId: string, emoji: string) => void;
+  onUnreact: (messageId: string, emoji: string) => void;
+}
+
+const MessageItem = memo(({ msg, reactions, currentUserId, onReact, onUnreact }: MessageItemProps) => {
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
   if (msg.message_type === 'system') {
     const { Icon, cls } = systemIconFor(msg.message);
     return (
@@ -59,6 +120,24 @@ const MessageItem = memo(({ msg }: { msg: ProcessedMessage }) => {
       </div>
     );
   }
+
+  const groupedReactions = groupReactions(reactions, currentUserId);
+
+  const handleChipClick = (emoji: string, hasMine: boolean) => {
+    if (hasMine) onUnreact(msg.id, emoji);
+    else onReact(msg.id, emoji);
+  };
+
+  const handlePalettePick = (emoji: string) => {
+    const hasMine = groupedReactions.find((g) => g.emoji === emoji)?.hasMine ?? false;
+    if (hasMine) onUnreact(msg.id, emoji);
+    else onReact(msg.id, emoji);
+    setPaletteOpen(false);
+  };
+
+  const bubbleClass = msg.isJumbo
+    ? 'msg-bubble-jumbo'
+    : `msg-bubble ${msg.isSelf ? 'msg-bubble-self' : 'msg-bubble-other'}`;
 
   return (
     <div
@@ -72,12 +151,64 @@ const MessageItem = memo(({ msg }: { msg: ProcessedMessage }) => {
       {!msg.isSelf && msg.isGrouped && <div className="msg-avatar-spacer" />}
 
       <div className="msg-bubble-wrap">
-        <div className={`msg-bubble ${msg.isSelf ? 'msg-bubble-self' : 'msg-bubble-other'}`}>
-          {!msg.isSelf && !msg.isGrouped && (
-            <div className="msg-bubble-name" style={{ color: msg.userColor }}>{msg.username}</div>
-          )}
-          <span className="msg-bubble-text">{msg.message}</span>
+        <div className="msg-bubble-and-react">
+          <div className={bubbleClass}>
+            {!msg.isJumbo && !msg.isSelf && !msg.isGrouped && (
+              <div className="msg-bubble-name" style={{ color: msg.userColor }}>{msg.username}</div>
+            )}
+            <span className="msg-bubble-text">{msg.message}</span>
+          </div>
+          <Popover open={paletteOpen} onOpenChange={setPaletteOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="msg-react-btn"
+                aria-label="Add reaction"
+                title="Add reaction"
+              >
+                <SmilePlus className="h-3.5 w-3.5" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent
+              className="msg-react-palette"
+              side="top"
+              align={msg.isSelf ? 'end' : 'start'}
+              sideOffset={6}
+            >
+              {QUICK_REACTIONS.map((emoji) => {
+                const mine = groupedReactions.find((g) => g.emoji === emoji)?.hasMine ?? false;
+                return (
+                  <button
+                    key={emoji}
+                    type="button"
+                    className={`msg-react-palette-btn ${mine ? 'is-mine' : ''}`}
+                    onClick={() => handlePalettePick(emoji)}
+                    aria-label={`React with ${emoji}`}
+                  >
+                    {emoji}
+                  </button>
+                );
+              })}
+            </PopoverContent>
+          </Popover>
         </div>
+        {groupedReactions.length > 0 && (
+          <div className="msg-reactions-row">
+            {groupedReactions.map((g) => (
+              <button
+                key={g.emoji}
+                type="button"
+                className={`msg-reaction-chip ${g.hasMine ? 'is-mine' : ''}`}
+                onClick={() => handleChipClick(g.emoji, g.hasMine)}
+                title={g.usernames.join(', ')}
+                aria-label={`${g.count} ${g.emoji} reaction${g.count > 1 ? 's' : ''}`}
+              >
+                <span className="msg-reaction-chip-emoji">{g.emoji}</span>
+                <span className="msg-reaction-chip-count">{g.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
         <span className="msg-bubble-time">{msg.formattedTime}</span>
       </div>
     </div>
@@ -89,18 +220,24 @@ export function ChatSidebar({
   messages,
   members,
   currentUsername,
+  reactionsByMessage,
   onSendMessage,
   onRename,
+  onReact,
+  onUnreact,
   isOpen,
 }: ChatSidebarProps) {
   const [messageText, setMessageText] = useState('');
   const [isEditingName, setIsEditingName] = useState(false);
   const [newName, setNewName] = useState(currentUsername);
   const [isTyping, setIsTyping] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const currentUserId = useMemo(() => getUserId(), []);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const bottomSentinelRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const prevMessageCountRef = useRef(0);
   const isNearBottomRef = useRef(true);
   const justSentRef = useRef(false);
@@ -165,6 +302,7 @@ export function ChatSidebar({
         userColor: getUserColor(msg.user_id),
         isGrouped: isGrouped && !daySeparator,
         isSelf: msg.user_id === currentUserId,
+        isJumbo: msg.message_type === 'chat' && isJumboEmojiMessage(msg.message),
         daySeparator,
       };
     });
@@ -204,12 +342,15 @@ export function ChatSidebar({
     if (el) el.scrollTop = el.scrollHeight;
   }, []);
 
-  // Track whether the user is within 80 px of the bottom. Mutable ref so
-  // every scroll event is O(1) and doesn't re-render the component.
+  // Fallback scroll-based near-bottom check. The authoritative signal
+  // is the IntersectionObserver on the bottom sentinel (see below) —
+  // this is kept so the very first scrollToBottom during mount has a
+  // reasonable default. Threshold widened from 80px to 200px so a
+  // casual trackpad nudge doesn't unpin auto-scroll.
   const handleScroll = useCallback(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
-    isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 200;
   }, []);
 
   // After each DOM commit that added messages: scroll only when the user
@@ -230,11 +371,61 @@ export function ChatSidebar({
     prevMessageCountRef.current = currentCount;
   }, [messages, scrollToBottom]);
 
-  // Initial scroll on first load
+  // Authoritative "am I at the bottom?" signal. An IntersectionObserver
+  // on an invisible sentinel at the end of the list reports reliably
+  // whether the bottom is in view, regardless of whether scroll events
+  // fire (they don't fire when content grows without user interaction,
+  // which is what left isNearBottomRef stale over long sessions).
+  // A `rootMargin` of 200px means "still counts as bottom if within
+  // 200px" — matches the scroll fallback threshold.
   useEffect(() => {
-    if (messages.length > 0) scrollToBottom();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages.length > 0]);
+    const root = scrollContainerRef.current;
+    const target = bottomSentinelRef.current;
+    if (!root || !target) return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        isNearBottomRef.current = entry.isIntersecting;
+      },
+      { root, threshold: 0, rootMargin: '0px 0px 200px 0px' },
+    );
+    io.observe(target);
+    return () => io.disconnect();
+  }, []);
+
+  // Re-pin to bottom when layout settles after the initial load.
+  // useLayoutEffect's scrollHeight snapshot can be stale because Google
+  // Fonts (Press Start 2P, Inter) load asynchronously — after the swap,
+  // every bubble's text metrics change and scrollHeight grows, leaving
+  // the previous scrollTop stranded partway through history. A
+  // ResizeObserver on the scroll content catches that (and any other
+  // late layout change) and re-pins — but only while the user hasn't
+  // scrolled up to read history.
+  useEffect(() => {
+    const scrollEl = scrollContainerRef.current;
+    if (!scrollEl) return;
+    const content = scrollEl.firstElementChild;
+    if (!content) return;
+    const ro = new ResizeObserver(() => {
+      if (isNearBottomRef.current) scrollToBottom();
+    });
+    ro.observe(content);
+    return () => ro.disconnect();
+  }, [scrollToBottom]);
+
+  // Belt-and-suspenders for the font-swap race: fire one final re-pin
+  // once webfonts are fully ready, in case the ResizeObserver missed
+  // the settling frame.
+  useEffect(() => {
+    if (!('fonts' in document)) return;
+    let cancelled = false;
+    document.fonts.ready.then(() => {
+      if (cancelled) return;
+      if (isNearBottomRef.current) scrollToBottom();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [scrollToBottom]);
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.currentTarget.value;
@@ -256,6 +447,24 @@ export function ChatSidebar({
     setMessageText('');
     setIsTyping(false);
   }, [messageText, onSendMessage]);
+
+  const insertEmoji = useCallback((emojiData: EmojiClickData) => {
+    const emoji = emojiData.emoji;
+    const input = inputRef.current;
+    const start = input?.selectionStart ?? messageText.length;
+    const end = input?.selectionEnd ?? messageText.length;
+    const next = messageText.slice(0, start) + emoji + messageText.slice(end);
+    setMessageText(next);
+    // Restore focus + place caret after the inserted emoji on the next frame,
+    // after React has committed the new value.
+    requestAnimationFrame(() => {
+      const el = inputRef.current;
+      if (!el) return;
+      el.focus();
+      const pos = start + emoji.length;
+      el.setSelectionRange(pos, pos);
+    });
+  }, [messageText]);
 
   const handleRename = useCallback(() => {
     if (!newName.trim() || newName === currentUsername) {
@@ -439,9 +648,16 @@ export function ChatSidebar({
                     <span className="date-separator-chip">{msg.daySeparator}</span>
                   </div>
                 )}
-                <MessageItem msg={msg} />
+                <MessageItem
+                  msg={msg}
+                  reactions={reactionsByMessage[msg.id]}
+                  currentUserId={currentUserId}
+                  onReact={onReact}
+                  onUnreact={onUnreact}
+                />
               </div>
             ))}
+            <div ref={bottomSentinelRef} aria-hidden="true" />
           </div>
         </div>
       </div>
@@ -452,7 +668,36 @@ export function ChatSidebar({
           {isTyping ? 'pressing keys…' : ''}
         </div>
         <div className="chat-input-wrapper">
+          <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="chat-emoji-btn"
+                aria-label="Open emoji picker"
+                title="Emoji"
+              >
+                <Smile className="h-4 w-4" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent
+              side="top"
+              align="start"
+              sideOffset={8}
+              className="chat-emoji-popover"
+            >
+              <Suspense fallback={<div className="chat-emoji-loading">Loading…</div>}>
+                <EmojiPicker
+                  onEmojiClick={insertEmoji}
+                  autoFocusSearch={false}
+                  lazyLoadEmojis
+                  width={320}
+                  height={380}
+                />
+              </Suspense>
+            </PopoverContent>
+          </Popover>
           <Input
+            ref={inputRef}
             type="text"
             placeholder="Message the room…"
             value={messageText}

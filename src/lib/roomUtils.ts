@@ -86,6 +86,27 @@ export function formatMessageTime(iso: string): string {
   });
 }
 
+// Messenger-style "jumbo" emoji: a chat message made of only 1–3 emoji
+// renders larger with no bubble. We split into grapheme clusters so
+// composite emoji (👨‍👩‍👧, 🏳️‍🌈) count as one, then require every
+// cluster to be pictographic / emoji-component.
+const EMOJI_ONLY_RE = /^[\p{Extended_Pictographic}\p{Emoji_Component}\uFE0F\u200D]+$/u;
+export function isJumboEmojiMessage(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  if (typeof Intl === 'undefined' || typeof Intl.Segmenter !== 'function') {
+    return trimmed.length <= 8 && EMOJI_ONLY_RE.test(trimmed);
+  }
+  const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+  let count = 0;
+  for (const { segment } of segmenter.segment(trimmed)) {
+    if (!EMOJI_ONLY_RE.test(segment)) return false;
+    count += 1;
+    if (count > 3) return false;
+  }
+  return count > 0;
+}
+
 // Day-bucket key for grouping messages into Today / Yesterday / Month Day
 export function formatDateSeparator(iso: string, now: Date = new Date()): string {
   const then = new Date(iso);
