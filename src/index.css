@@ -696,6 +696,22 @@
   color: var(--pixel-text-primary) !important;
 }
 
+.audio-controls-left button[aria-label="Next song"] {
+  width: 36px !important;
+  height: 36px !important;
+  background-color: var(--pixel-accent-sun) !important;
+  color: var(--pixel-text-primary) !important;
+  border-color: var(--pixel-accent-sun);
+}
+
+.audio-controls-left button[aria-label="Next song"]:hover:not(:disabled) {
+  box-shadow: 0 0 12px rgba(255, 215, 106, 0.65), 2px 2px 0 0 #c9a84a;
+}
+
+.audio-controls-left button[aria-label="Next song"]:disabled {
+  opacity: 0.4;
+}
+
 .audio-controls-left .lucide {
   color: var(--pixel-text-primary) !important;
 }
