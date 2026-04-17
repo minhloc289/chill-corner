@@ -746,23 +746,29 @@ export default function Room() {
     // Check if there's a current song playing
     if (!room?.current_song_url) {
       // NO SONG PLAYING - Start immediately (don't add to queue)
+      const nowIso = new Date().toISOString();
 
-      // OPTIMISTIC: Update local state
+      // OPTIMISTIC: Update local state (also clear any stale pause state)
       setRoom((prev) => prev ? {
         ...prev,
         current_song_url: url,
         current_song_title: title,
-        current_song_started_at: new Date().toISOString(),
+        current_song_started_at: nowIso,
+        is_paused: false,
+        paused_at: null,
       } : prev);
 
-      // Update database
+      // Update database — clear pause state so stale paused_at doesn't break
+      // the resume calculation later (which would shift started_at into the future)
       const { error } = await supabase
         .from('rooms')
         .update({
           current_song_url: url,
           current_song_title: title,
-          current_song_started_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          current_song_started_at: nowIso,
+          is_paused: false,
+          paused_at: null,
+          updated_at: nowIso,
         })
         .eq('id', roomId);
 
@@ -937,10 +943,17 @@ export default function Room() {
         .eq('id', roomId);
     } else {
       // Unpausing: shift current_song_started_at forward by the paused duration
-      // so playback resumes from where it was paused
-      if (room.current_song_started_at && room.paused_at) {
-        const pausedDuration = Date.now() - new Date(room.paused_at).getTime();
-        const newStartedAt = new Date(new Date(room.current_song_started_at).getTime() + pausedDuration).toISOString();
+      // so playback resumes from where it was paused.
+      // Guard against stale paused_at (older than current_song_started_at, which
+      // can happen if the song was replaced while paused) — in that case we
+      // only clear the pause state without shifting.
+      const startedAtMs = room.current_song_started_at ? new Date(room.current_song_started_at).getTime() : 0;
+      const pausedAtMs = room.paused_at ? new Date(room.paused_at).getTime() : 0;
+      const canShift = room.current_song_started_at && room.paused_at && pausedAtMs >= startedAtMs;
+
+      if (canShift) {
+        const pausedDuration = Date.now() - pausedAtMs;
+        const newStartedAt = new Date(startedAtMs + pausedDuration).toISOString();
         await supabase
           .from('rooms')
           .update({ is_paused: false, paused_at: null, current_song_started_at: newStartedAt })
