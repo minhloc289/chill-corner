@@ -716,6 +716,44 @@
   color: var(--pixel-text-primary) !important;
 }
 
+.global-pause-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  font-family: var(--font-pixel, 'Press Start 2P', monospace);
+  color: var(--pixel-text-primary);
+  background-color: var(--pixel-accent-rose);
+  border: 2px solid var(--pixel-accent-rose);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  height: 36px;
+}
+
+.global-pause-btn:hover {
+  box-shadow: 0 0 12px rgba(255, 122, 147, 0.65), 2px 2px 0 0 #c4506a;
+}
+
+.global-pause-btn-active {
+  background-color: var(--pixel-accent-mint);
+  border-color: var(--pixel-accent-mint);
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.global-pause-btn-active:hover {
+  box-shadow: 0 0 12px rgba(110, 193, 167, 0.65), 2px 2px 0 0 #4a9a7e;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 4px rgba(110, 193, 167, 0.3); }
+  50% { box-shadow: 0 0 12px rgba(110, 193, 167, 0.6); }
+}
+
 .audio-info {
   @apply flex-1 min-w-0 px-3;
 }

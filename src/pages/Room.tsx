@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '@/lib/supabaseClient';
+import { supabase, type RealtimeChannel } from '@/lib/supabaseClient';
 import { RoomScene } from '@/components/RoomScene';
 import { YouTubePlayer } from '@/components/YouTubePlayer';
 import { ChatSidebar } from '@/components/ChatSidebar';
@@ -14,6 +14,8 @@ interface Room {
   current_song_url: string | null;
   current_song_title: string | null;
   current_song_started_at: string | null;
+  is_paused: boolean;
+  paused_at: string | null;
 }
 
 interface Song {
@@ -71,11 +73,11 @@ export default function Room() {
   const [unreadCount, setUnreadCount] = useState(0);
   const isChatOpenRef = useRef(isChatOpen);
   const messageIdsRef = useRef<Set<string>>(new Set());
-  const subscriptionRef = useRef<any>(null);
+  const subscriptionRef = useRef<RealtimeChannel | null>(null);
   const subscriptionActiveRef = useRef<boolean>(false);
   const messageInsertQueueRef = useRef<Set<string>>(new Set());
   const sendingRef = useRef<boolean>(false); // Prevent rapid double-sends
-  const presenceChannelRef = useRef<any>(null);
+  const presenceChannelRef = useRef<RealtimeChannel | null>(null);
   const presenceReadyRef = useRef(false);
   // Gate: ensures the "you joined the room" system message fires at
   // most once per channel lifetime, even when rename re-tracks presence
@@ -342,11 +344,11 @@ export default function Room() {
       })
       .on('presence', { event: 'join' }, ({ newPresences }) => {
         syncMembers();
-        handleJoin(newPresences as PresenceEntry[]);
+        handleJoin(newPresences as unknown as PresenceEntry[]);
       })
       .on('presence', { event: 'leave' }, ({ leftPresences }) => {
         syncMembers();
-        handleLeave(leftPresences as PresenceEntry[]);
+        handleLeave(leftPresences as unknown as PresenceEntry[]);
       })
       // Fast-path: the leaver's pagehide handler fires this broadcast
       // just before the tab dies. We don't wait for the server's
@@ -567,7 +569,7 @@ export default function Room() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'playlist', filter: `room_id=eq.${roomIdParam}` },
-        (payload) => {
+        () => {
           loadPlaylist(roomIdParam);
         }
       )
@@ -673,8 +675,7 @@ export default function Room() {
         },
       )
       .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-        } else if (status === 'CHANNEL_ERROR') {
+        if (status === 'CHANNEL_ERROR') {
           console.error('Failed to subscribe to room updates');
         }
       });
@@ -690,15 +691,6 @@ export default function Room() {
       messageInsertQueueRef.current.clear(); // Clear in-flight queue
     };
   };
-
-  const handleWeatherChange = useCallback(async (weather: 'sun' | 'rain' | 'night') => {
-    if (!roomId) return;
-
-    await supabase
-      .from('rooms')
-      .update({ weather, updated_at: new Date().toISOString() })
-      .eq('id', roomId);
-  }, [roomId]);
 
   const handleSceneChange = useCallback(async (scenePreset: string) => {
     if (!roomId || !room) return;
@@ -721,7 +713,6 @@ export default function Room() {
         .eq('id', roomId)
         .single();
       if (data) setRoom(data);
-    } else {
     }
   }, [roomId, room]);
 
@@ -845,16 +836,20 @@ export default function Room() {
           current_song_url: nextSong.url,
           current_song_title: nextSong.title,
           current_song_started_at: newStartTime,
+          is_paused: false,
+          paused_at: null,
         } : prev);
 
         // ATOMIC OPERATIONS: Do both database operations
-        // 1. Update room with next song
+        // 1. Update room with next song (also clear pause state)
         const { error: roomError } = await supabase
           .from('rooms')
           .update({
             current_song_url: nextSong.url,
             current_song_title: nextSong.title,
             current_song_started_at: newStartTime,
+            is_paused: false,
+            paused_at: null,
             updated_at: new Date().toISOString(),
           })
           .eq('id', roomId);
@@ -925,6 +920,39 @@ export default function Room() {
       }
     }
   }, [roomId, playlist]);
+
+  const handleTogglePause = useCallback(async () => {
+    if (!roomId || !room) return;
+
+    const nowPaused = !room.is_paused;
+
+    // OPTIMISTIC: Update local state immediately
+    setRoom((prev) => prev ? { ...prev, is_paused: nowPaused, paused_at: nowPaused ? new Date().toISOString() : null } : prev);
+
+    if (nowPaused) {
+      // Pausing: store when we paused
+      await supabase
+        .from('rooms')
+        .update({ is_paused: true, paused_at: new Date().toISOString() })
+        .eq('id', roomId);
+    } else {
+      // Unpausing: shift current_song_started_at forward by the paused duration
+      // so playback resumes from where it was paused
+      if (room.current_song_started_at && room.paused_at) {
+        const pausedDuration = Date.now() - new Date(room.paused_at).getTime();
+        const newStartedAt = new Date(new Date(room.current_song_started_at).getTime() + pausedDuration).toISOString();
+        await supabase
+          .from('rooms')
+          .update({ is_paused: false, paused_at: null, current_song_started_at: newStartedAt })
+          .eq('id', roomId);
+      } else {
+        await supabase
+          .from('rooms')
+          .update({ is_paused: false, paused_at: null })
+          .eq('id', roomId);
+      }
+    }
+  }, [roomId, room]);
 
   const handleRemoveSong = useCallback(async (songId: string) => {
     if (!roomId) return;
@@ -1078,7 +1106,8 @@ export default function Room() {
         const withoutMine = list.filter((r) => r.user_id !== userId);
         const restored = existingMine ? [...withoutMine, existingMine] : withoutMine;
         if (restored.length === 0) {
-          const { [messageId]: _, ...rest } = prev;
+          const { [messageId]: _removed, ...rest } = prev;
+          void _removed;
           return rest;
         }
         return { ...prev, [messageId]: restored };
@@ -1106,7 +1135,8 @@ export default function Room() {
       if (!removed) return prev;
       const filtered = existing.filter((r) => r !== removed);
       if (filtered.length === 0) {
-        const { [messageId]: _, ...rest } = prev;
+        const { [messageId]: _removed, ...rest } = prev;
+        void _removed;
         return rest;
       }
       return { ...prev, [messageId]: filtered };
@@ -1201,6 +1231,8 @@ export default function Room() {
           onAddSong={handleAddSong}
           onSkip={handleSkip}
           onRemoveSong={handleRemoveSong}
+          isPaused={room?.is_paused ?? false}
+          onTogglePause={handleTogglePause}
           isChatOpen={isChatOpen}
         />
         <ChatToggleButton

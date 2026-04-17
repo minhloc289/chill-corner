@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from './ui/button';
-import { Play, Pause, SkipForward, ChevronDown, Plus, ListMusic } from 'lucide-react';
+import { Play, Pause, SkipForward, CirclePause, CirclePlay, ChevronDown, Plus, ListMusic } from 'lucide-react';
 import { Card } from './ui/card';
 import { YouTubeSearchTab } from './YouTubeSearchTab';
 import { VolumeControl } from './VolumeControl';
@@ -36,26 +36,28 @@ interface YouTubePlayerProps {
   onAddSong: (url: string, title: string) => void;
   onSkip: () => void;
   onRemoveSong?: (songId: string) => void;
+  isPaused?: boolean;
+  onTogglePause?: () => void;
   isChatOpen?: boolean;
 }
 
 declare global {
   interface Window {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     YT: any;
     onYouTubeIframeAPIReady: () => void;
   }
 }
 
-export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemoveSong, isChatOpen = true }: YouTubePlayerProps) {
+export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemoveSong, isPaused = false, onTogglePause, isChatOpen = true }: YouTubePlayerProps) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const playerRef = useRef<any>(null);
   const playerContainerId = useRef(`youtube-player-${Math.random().toString(36).substr(2, 9)}`);
-  const [songUrl, setSongUrl] = useState('');
   const [isReady, setIsReady] = useState(false);
   const [apiReady, setApiReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
-  const [lastStartedAt, setLastStartedAt] = useState<number>(0);
   const syncIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [isPlayingDefault, setIsPlayingDefault] = useState(false);
   const [currentDefaultIndex, setCurrentDefaultIndex] = useState(0);
@@ -136,6 +138,7 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
             onReady: () => {
               setIsReady(true);
             },
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             onStateChange: (event: any) => {
               if (event.data === window.YT.PlayerState.PLAYING) {
                 setIsPlaying(true);
@@ -190,28 +193,32 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
 
       if (isPlayingDefault) setIsPlayingDefault(false);
 
-      const currentStartedAt = new Date(currentSong.startedAt).getTime();
-      const isSameSong = currentVideoId === videoId &&
-                         Math.abs(currentStartedAt - lastStartedAt) < 1000;
+      // Only check video ID for "same song" — ignore startedAt changes from pause/resume
+      const isSameVideo = currentVideoId === videoId;
 
-      if (isSameSong) return;
+      if (!isSameVideo) {
+        // New song: load and seek to correct position
+        try {
+          const elapsedSeconds = Math.max(0, (Date.now() - new Date(currentSong.startedAt).getTime()) / 1000);
 
-      try {
-        const elapsedSeconds = Math.max(0, (Date.now() - currentStartedAt) / 1000);
+          playerRef.current.loadVideoById({
+            videoId,
+            startSeconds: elapsedSeconds,
+          });
 
-        playerRef.current.loadVideoById({
-          videoId,
-          startSeconds: elapsedSeconds,
-        });
+          setTimeout(() => {
+            // Only auto-play if room is NOT paused
+            if (!isPaused) {
+              playerRef.current?.playVideo();
+            } else {
+              playerRef.current?.pauseVideo();
+            }
+          }, 500);
 
-        setTimeout(() => {
-          playerRef.current?.playVideo();
-        }, 500);
-
-        setCurrentVideoId(videoId);
-        setLastStartedAt(currentStartedAt);
-      } catch (error) {
-        console.error('Error loading video:', error);
+          setCurrentVideoId(videoId);
+        } catch (error) {
+          console.error('Error loading video:', error);
+        }
       }
     }
     // CASE 2: No user song, no playlist -> Play default music
@@ -242,10 +249,10 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
       if (currentVideoId) {
         setCurrentVideoId(null);
         setIsPlayingDefault(false);
-        try { playerRef.current?.stopVideo(); } catch {}
+        try { playerRef.current?.stopVideo(); } catch { /* ignore */ }
       }
     }
-  }, [currentSong, playlist.length, isReady, currentVideoId, lastStartedAt, isPlayingDefault, currentDefaultIndex]);
+  }, [currentSong, playlist.length, isReady, currentVideoId, isPlayingDefault, currentDefaultIndex, isPaused]);
 
   // Periodic sync check to keep playback aligned (only for user songs, not default music)
   useEffect(() => {
@@ -254,12 +261,12 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
       clearInterval(syncIntervalRef.current);
     }
 
-    // Only sync if we have a USER song (not default music) and player is ready
-    if (!currentSong || !isReady || !playerRef.current || !currentVideoId || isPlayingDefault) {
+    // Only sync if we have a USER song (not default music), player is ready, and not paused
+    if (!currentSong || !isReady || !playerRef.current || !currentVideoId || isPlayingDefault || isPaused) {
       return;
     }
 
-    // Check sync every 5 seconds
+    // Check sync every 3 seconds
     syncIntervalRef.current = setInterval(() => {
       if (!playerRef.current || !currentSong) return;
 
@@ -270,50 +277,39 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
         const expectedTime = (now - startedAt) / 1000;
         const drift = Math.abs(currentTime - expectedTime);
 
-        if (drift > 3) {
+        // Tighter drift tolerance (1.5s) for better cross-user sync
+        if (drift > 1.5) {
           playerRef.current.seekTo(expectedTime, true);
           const state = playerRef.current.getPlayerState();
           if (state !== window.YT.PlayerState.PLAYING) {
             playerRef.current.playVideo();
           }
         }
-      } catch {}
-    }, 5000);
+      } catch { /* ignore */ }
+    }, 3000);
 
     return () => {
       if (syncIntervalRef.current) {
         clearInterval(syncIntervalRef.current);
       }
     };
-  }, [currentSong, isReady, currentVideoId, isPlayingDefault]);
+  }, [currentSong, isReady, currentVideoId, isPlayingDefault, isPaused]);
 
-  const handleAddSong = async () => {
-    if (!songUrl.trim()) return;
+  // Room-wide pause/resume: react to isPaused from room state
+  useEffect(() => {
+    if (!isReady || !playerRef.current) return;
 
-    const videoId = getVideoId(songUrl);
-    if (!videoId) {
-      alert('Invalid YouTube URL. Please paste a valid YouTube video URL.');
-      return;
+    if (isPaused) {
+      playerRef.current.pauseVideo();
+    } else if (currentSong || isPlayingDefault) {
+      // On resume: seek to the correct position based on updated startedAt, then play
+      if (currentSong) {
+        const elapsedSeconds = Math.max(0, (Date.now() - new Date(currentSong.startedAt).getTime()) / 1000);
+        playerRef.current.seekTo(elapsedSeconds, true);
+      }
+      playerRef.current.playVideo();
     }
-
-    // Fetch video title from YouTube
-    try {
-      const response = await fetch(
-        `https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`
-      );
-      const data = await response.json();
-      const title = data.title || 'Untitled Video';
-
-      onAddSong(songUrl, title);
-      setSongUrl('');
-      setShowAddForm(false);
-    } catch (error) {
-      console.error('Error fetching video info:', error);
-      onAddSong(songUrl, 'Untitled Video');
-      setSongUrl('');
-      setShowAddForm(false);
-    }
-  };
+  }, [isPaused, isReady, currentSong]);
 
   const togglePlayPause = () => {
     if (!playerRef.current) return;
@@ -382,6 +378,19 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
             >
               <SkipForward className="h-5 w-5" />
             </Button>
+            {(currentSong || isPlayingDefault) && onTogglePause && (
+              <button
+                type="button"
+                className={`global-pause-btn ${isPaused ? 'global-pause-btn-active' : ''}`}
+                onClick={onTogglePause}
+              >
+                {isPaused ? (
+                  <><CirclePlay className="h-4 w-4" /> RESUME</>
+                ) : (
+                  <><CirclePause className="h-4 w-4" /> BREAK</>
+                )}
+              </button>
+            )}
           </div>
 
           {/* Center: Thumbnail + Song info */}
@@ -404,7 +413,7 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
                   <p className="audio-title">{currentSong.title}</p>
                   <div className="audio-meta-row">
                     <p className="audio-subtitle">
-                      {isPlaying && (
+                      {isPlaying && !isPaused && (
                         <span className="pixel-equalizer" aria-hidden="true">
                           <span className="pixel-eq-bar" />
                           <span className="pixel-eq-bar" />
@@ -412,7 +421,7 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
                           <span className="pixel-eq-bar" />
                         </span>
                       )}
-                      Now Playing
+                      {isPaused ? 'Paused' : 'Now Playing'}
                     </p>
                     {playlist.length > 0 && (
                       <p className="audio-next-up">
