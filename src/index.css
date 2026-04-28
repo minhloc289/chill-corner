@@ -3849,3 +3849,88 @@
 .youtube-search-container .gsc-results-wrapper-visible::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.3);
 }
+
+/* ============================================
+   Chat image attachments
+   ============================================ */
+.chat-image-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.chat-image-preview {
+  position: relative;
+  display: inline-block;
+  margin: 0 12px 6px;
+  padding: 4px;
+  border: 1px solid var(--pixel-border, rgba(0, 0, 0, 0.15));
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  max-width: 180px;
+}
+.chat-image-preview img {
+  display: block;
+  max-width: 100%;
+  max-height: 140px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+.chat-image-preview-close {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  background: var(--pixel-accent-peach, #ff6b6b);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+  transition: transform 0.12s ease;
+}
+.chat-image-preview-close:hover {
+  transform: scale(1.08);
+}
+
+.msg-bubble-image-link {
+  display: block;
+  margin: 0 -8px;
+  margin-bottom: 4px;
+  border-radius: 12px;
+  overflow: hidden;
+  line-height: 0;
+}
+.msg-bubble-image-link:first-child {
+  margin-top: -4px;
+}
+.msg-bubble-image {
+  display: block;
+  max-width: 280px;
+  max-height: 240px;
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+  background: rgba(0, 0, 0, 0.05);
+  cursor: zoom-in;
+  transition: opacity 0.15s ease;
+}
+.msg-bubble-image:hover { opacity: 0.92; }
+/* Tighten bubble padding when an image is the only/first content */
+.msg-bubble:has(.msg-bubble-image-link) {
+  padding: 4px;
+}
+.msg-bubble:has(.msg-bubble-image-link) .msg-bubble-text {
+  padding: 4px 8px 6px;
+  display: block;
+}

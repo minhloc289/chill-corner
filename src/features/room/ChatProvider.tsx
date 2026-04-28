@@ -24,7 +24,7 @@ export interface ChatState {
 
 export interface ChatDispatch {
   resetUnreadCount: () => void;
-  sendMessage: (message: string, replyTo: Message | null) => void | Promise<void>;
+  sendMessage: (message: string, replyTo: Message | null, image?: File | null) => void | Promise<void>;
   react: (messageId: string, emoji: string) => void | Promise<void>;
   unreact: (messageId: string, emoji: string) => void | Promise<void>;
   buzz: () => void | Promise<void>;

@@ -3,7 +3,9 @@ import type { EmojiClickData, EmojiStyle } from 'emoji-picker-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Popover, PopoverTrigger, PopoverContent } from './ui/popover';
-import { Send, Check, X, Pencil, Smile, Zap } from 'lucide-react';
+import { Send, Check, X, Pencil, Smile, Zap, ImagePlus } from 'lucide-react';
+import { toast } from 'sonner';
+import { validateImage, ChatImageError } from '@/lib/imageUpload';
 import {
   getUserColor,
   getUserId,
@@ -34,6 +36,7 @@ interface Message {
   reply_to_id?: string | null;
   reply_to_username?: string | null;
   reply_to_message?: string | null;
+  image_url?: string | null;
 }
 
 const BUZZ_COOLDOWN_MS = 5000;
@@ -59,7 +62,7 @@ interface ChatSidebarProps {
   members: RoomMember[];
   currentUsername: string;
   reactionsByMessage: Record<string, Reaction[]>;
-  onSendMessage: (message: string, replyTo: Message | null) => void;
+  onSendMessage: (message: string, replyTo: Message | null, image?: File | null) => void;
   onRename: (newName: string) => void;
   onReact: (messageId: string, emoji: string) => void;
   onUnreact: (messageId: string, emoji: string) => void;
@@ -87,6 +90,9 @@ export function ChatSidebar({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [buzzCooldown, setBuzzCooldown] = useState(0);
+  const [pendingImage, setPendingImage] = useState<File | null>(null);
+  const [pendingImagePreview, setPendingImagePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const buzzCooldownTimerRef = useRef<number | null>(null);
   const reactedBuzzIdsRef = useRef<Set<string>>(new Set());
 
@@ -147,12 +153,14 @@ export function ChatSidebar({
     return messages.map((msg, index) => {
       const prevMsg = index > 0 ? messages[index - 1] : null;
       const hasReply = !!msg.reply_to_id || !!msg.reply_to_message;
+      const hasImage = !!msg.image_url;
       const isGrouped =
         prevMsg !== null &&
         prevMsg.user_id === msg.user_id &&
         prevMsg.message_type === 'chat' &&
         msg.message_type === 'chat' &&
         !hasReply &&
+        !hasImage &&
         new Date(msg.created_at).getTime() - new Date(prevMsg.created_at).getTime() < 120_000;
 
       const day = formatDateSeparator(msg.created_at);
@@ -165,8 +173,8 @@ export function ChatSidebar({
         userColor: getUserColor(msg.user_id),
         isGrouped: isGrouped && !daySeparator,
         isSelf: msg.user_id === currentUserId,
-        // Quote cards own the visual weight — don't also jumbo-ify the text.
-        isJumbo: !hasReply && msg.message_type === 'chat' && isJumboEmojiMessage(msg.message),
+        // Quote cards / images own the visual weight — don't also jumbo-ify the text.
+        isJumbo: !hasReply && !hasImage && msg.message_type === 'chat' && isJumboEmojiMessage(msg.message),
         daySeparator,
         groupedReactions: groupReactions(reactionsByMessage[msg.id], currentUserId),
       };
@@ -214,14 +222,69 @@ export function ChatSidebar({
     }
   }, []);
 
+  const attachImage = useCallback((file: File) => {
+    try {
+      validateImage(file);
+    } catch (e) {
+      if (e instanceof ChatImageError) toast.error(e.message);
+      return;
+    }
+    setPendingImage(file);
+    setPendingImagePreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, []);
+
+  const clearPendingImage = useCallback(() => {
+    setPendingImagePreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setPendingImage(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }, []);
+
+  // Revoke any leftover preview URL on unmount.
+  useEffect(() => () => {
+    setPendingImagePreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+  }, []);
+
   const handleSendMessage = useCallback(() => {
-    if (!messageText.trim()) return;
+    if (!messageText.trim() && !pendingImage) return;
     justSentRef.current = true;
-    onSendMessage(messageText, replyTo);
+    onSendMessage(messageText, replyTo, pendingImage);
     setMessageText('');
     setReplyTo(null);
     setIsTyping(false);
-  }, [messageText, onSendMessage, replyTo]);
+    clearPendingImage();
+  }, [messageText, onSendMessage, replyTo, pendingImage, clearPendingImage]);
+
+  const handleFilePicked = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) attachImage(file);
+    // Reset so picking the same file twice still fires onChange.
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }, [attachImage]);
+
+  const handleComposerPaste = useCallback((e: React.ClipboardEvent<HTMLInputElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.kind === 'file' && item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) {
+          e.preventDefault();
+          attachImage(file);
+          return;
+        }
+      }
+    }
+  }, [attachImage]);
 
   const handleBuzzClick = useCallback(() => {
     if (Date.now() < buzzCooldown) return;
@@ -547,7 +610,39 @@ export function ChatSidebar({
             </button>
           </div>
         )}
+        {pendingImagePreview && (
+          <div className="chat-image-preview" role="status">
+            <img src={pendingImagePreview} alt="Attached preview" />
+            <button
+              type="button"
+              className="chat-image-preview-close"
+              onClick={clearPendingImage}
+              aria-label="Remove attached image"
+              title="Remove image"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        )}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/gif,image/webp"
+          className="chat-image-file-input"
+          onChange={handleFilePicked}
+          aria-hidden="true"
+          tabIndex={-1}
+        />
         <div className="chat-input-wrapper">
+          <button
+            type="button"
+            className="chat-emoji-btn"
+            aria-label="Attach image"
+            title="Attach image"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <ImagePlus className="h-4 w-4" />
+          </button>
           <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
             <PopoverTrigger asChild>
               <button
@@ -583,9 +678,10 @@ export function ChatSidebar({
           <Input
             ref={inputRef}
             type="text"
-            placeholder="Message the room…"
+            placeholder={pendingImage ? 'Add a caption…' : 'Message the room…'}
             value={messageText}
             onChange={handleInputChange}
+            onPaste={handleComposerPaste}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -613,7 +709,7 @@ export function ChatSidebar({
             size="icon"
             type="button"
             className="chat-send-button"
-            disabled={!messageText.trim()}
+            disabled={!messageText.trim() && !pendingImage}
             title="Send message (Enter)"
           >
             <Send className="h-4 w-4" />

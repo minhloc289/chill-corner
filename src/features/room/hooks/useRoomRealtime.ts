@@ -33,6 +33,7 @@ export interface Message {
   reply_to_id?: string | null;
   reply_to_username?: string | null;
   reply_to_message?: string | null;
+  image_url?: string | null;
 }
 
 export interface Reaction {

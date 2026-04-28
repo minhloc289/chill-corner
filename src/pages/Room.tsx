@@ -7,6 +7,8 @@ import { YouTubePlayer } from '@/components/YouTubePlayer';
 import { ChatSidebar } from '@/components/ChatSidebar';
 import { ChatToggleButton } from '@/components/ChatToggleButton';
 import { getUserId, getUsername, saveUsername, generateRoomId } from '@/lib/roomUtils';
+import { uploadChatImage, ChatImageError } from '@/lib/imageUpload';
+import { toast } from 'sonner';
 import {
   useRoomRealtime,
   type Message,
@@ -408,9 +410,14 @@ export default function Room() {
     }
   }, [roomId, setPlaylist, loadPlaylist, normalizePlaylistPositions]);
 
-  const handleSendMessage = useCallback(async (message: string, replyTo: Message | null) => {
+  const handleSendMessage = useCallback(async (
+    message: string,
+    replyTo: Message | null,
+    image: File | null = null,
+  ) => {
     if (!roomId) return;
     if (sendingRef.current) return;
+    if (!message.trim() && !image) return;
     sendingRef.current = true;
 
     const replyFields = replyTo
@@ -425,6 +432,22 @@ export default function Room() {
           reply_to_message: null,
         };
 
+    let imageUrl: string | null = null;
+    if (image) {
+      try {
+        imageUrl = await uploadChatImage(image, roomId);
+      } catch (error) {
+        sendingRef.current = false;
+        if (error instanceof ChatImageError) {
+          toast.error(error.message);
+        } else {
+          console.error('Image upload failed:', error);
+          toast.error('Could not upload image. Try again.');
+        }
+        return;
+      }
+    }
+
     const tempId = `temp-${Date.now()}-${Math.random()}`;
     const optimisticMessage: Message = {
       id: tempId,
@@ -433,6 +456,7 @@ export default function Room() {
       message,
       message_type: 'chat',
       created_at: new Date().toISOString(),
+      image_url: imageUrl,
       ...replyFields,
     };
 
@@ -447,6 +471,7 @@ export default function Room() {
           username,
           message,
           message_type: 'chat',
+          image_url: imageUrl,
           ...replyFields,
         })
         .select('id')

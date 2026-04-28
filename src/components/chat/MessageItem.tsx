@@ -13,6 +13,7 @@ export interface Message {
   reply_to_id?: string | null;
   reply_to_username?: string | null;
   reply_to_message?: string | null;
+  image_url?: string | null;
 }
 
 export interface ProcessedMessage extends Message {
@@ -121,7 +122,24 @@ export const MessageItem = memo(function MessageItem({
             {!msg.isJumbo && !msg.isSelf && !msg.isGrouped && (
               <div className="msg-bubble-name" style={{ color: msg.userColor }}>{msg.username}</div>
             )}
-            <span className="msg-bubble-text">{msg.message}</span>
+            {msg.image_url && (
+              <a
+                href={msg.image_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="msg-bubble-image-link"
+                aria-label="Open image in new tab"
+              >
+                <img
+                  src={msg.image_url}
+                  alt="Shared by sender"
+                  loading="lazy"
+                  decoding="async"
+                  className="msg-bubble-image"
+                />
+              </a>
+            )}
+            {msg.message && <span className="msg-bubble-text">{msg.message}</span>}
           </div>
           <div className="msg-actions-group">
             <button
