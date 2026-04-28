@@ -18,6 +18,7 @@ import {
 import { useChatScroll } from './chat/useChatScroll';
 import { MessageItem, type ProcessedMessage } from './chat/MessageItem';
 import { groupReactions } from './chat/MessageReactions';
+import { ImageLightbox } from './chat/ImageLightbox';
 
 // Lazy-load the picker so the ~80 KB chunk only hits the network
 // when the user first opens the smiley popover. `preloadEmojiPicker`
@@ -92,6 +93,7 @@ export function ChatSidebar({
   const [buzzCooldown, setBuzzCooldown] = useState(0);
   const [pendingImage, setPendingImage] = useState<File | null>(null);
   const [pendingImagePreview, setPendingImagePreview] = useState<string | null>(null);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const buzzCooldownTimerRef = useRef<number | null>(null);
   const reactedBuzzIdsRef = useRef<Set<string>>(new Set());
@@ -340,6 +342,9 @@ export function ChatSidebar({
     }
   }, [messages, currentUserId]);
 
+  const handleImageClick = useCallback((url: string) => setLightboxUrl(url), []);
+  const closeLightbox = useCallback(() => setLightboxUrl(null), []);
+
   const handleReplyRequest = useCallback((target: Message) => {
     setReplyTo(target);
     // Focus the input on the next frame so the keyboard is ready.
@@ -571,6 +576,7 @@ export function ChatSidebar({
                   onUnreact={onUnreact}
                   onReplyRequest={handleReplyRequest}
                   onJumpToMessage={jumpToMessage}
+                  onImageClick={handleImageClick}
                 />
               </div>
             ))}
@@ -719,6 +725,7 @@ export function ChatSidebar({
           <div className="chat-composer-counter">{charCount} chars</div>
         )}
       </div>
+      {lightboxUrl && <ImageLightbox src={lightboxUrl} onClose={closeLightbox} />}
     </div>
   );
 }

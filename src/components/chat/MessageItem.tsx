@@ -44,6 +44,7 @@ interface MessageItemProps {
   onUnreact: (messageId: string, emoji: string) => void;
   onReplyRequest: (msg: Message) => void;
   onJumpToMessage: (messageId: string) => void;
+  onImageClick: (url: string) => void;
 }
 
 // Manual memo. Remove when React Compiler is enabled (currently blocked: SWC plugin support pending).
@@ -54,6 +55,7 @@ export const MessageItem = memo(function MessageItem({
   onUnreact,
   onReplyRequest,
   onJumpToMessage,
+  onImageClick,
 }: MessageItemProps) {
   const [paletteOpen, setPaletteOpen] = useState(false);
 
@@ -123,12 +125,11 @@ export const MessageItem = memo(function MessageItem({
               <div className="msg-bubble-name" style={{ color: msg.userColor }}>{msg.username}</div>
             )}
             {msg.image_url && (
-              <a
-                href={msg.image_url}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
                 className="msg-bubble-image-link"
-                aria-label="Open image in new tab"
+                onClick={() => onImageClick(msg.image_url!)}
+                aria-label="Open image preview"
               >
                 <img
                   src={msg.image_url}
@@ -137,7 +138,7 @@ export const MessageItem = memo(function MessageItem({
                   decoding="async"
                   className="msg-bubble-image"
                 />
-              </a>
+              </button>
             )}
             {msg.message && <span className="msg-bubble-text">{msg.message}</span>}
           </div>

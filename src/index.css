@@ -3926,6 +3926,62 @@
   transition: opacity 0.15s ease;
 }
 .msg-bubble-image:hover { opacity: 0.92; }
+
+/* Lightbox modal — click bubble image to enlarge in-page */
+.chat-image-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  cursor: zoom-out;
+  animation: chat-image-lightbox-fade 0.18s ease-out;
+}
+@keyframes chat-image-lightbox-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.chat-image-lightbox-img {
+  max-width: min(96vw, 1280px);
+  max-height: 92vh;
+  width: auto;
+  height: auto;
+  border-radius: 8px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  cursor: default;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.chat-image-lightbox-close {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.92);
+  color: #1a1a1a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+.chat-image-lightbox-close:hover {
+  background: #fff;
+  transform: scale(1.05);
+}
+.chat-image-lightbox-close:focus-visible {
+  outline: 2px solid var(--pixel-accent-peach, #ff9a76);
+  outline-offset: 2px;
+}
 /* Tighten bubble padding when an image is the only/first content */
 .msg-bubble:has(.msg-bubble-image-link) {
   padding: 4px;
