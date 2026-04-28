@@ -25,15 +25,31 @@ export function VolumeControl({ playerRef, isReady }: VolumeControlProps) {
     }
   }, []);
 
+  // Apply volume to the YouTube player synchronously on every change —
+  // this part has to be immediate so the audio response feels instant.
   useEffect(() => {
     if (!isReady || !playerRef.current) return;
     try {
       playerRef.current.setVolume(isMuted ? 0 : volume);
-      localStorage.setItem('chill-room-volume', volume.toString());
     } catch (err) {
       console.error('Error setting volume:', err);
     }
   }, [volume, isMuted, isReady, playerRef]);
+
+  // Persist to localStorage on a 300ms debounce. Dragging the volume meter
+  // triggers many state changes per second; writing to localStorage on each
+  // one would block the main thread unnecessarily. We do NOT use
+  // requestIdleCallback — Safari has zero support as of 2026.
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      try {
+        localStorage.setItem('chill-room-volume', volume.toString());
+      } catch {
+        /* localStorage may be disabled in private mode — non-blocking */
+      }
+    }, 300);
+    return () => window.clearTimeout(t);
+  }, [volume]);
 
   const toggleMute = () => {
     if (isMuted) {

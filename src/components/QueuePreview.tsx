@@ -1,4 +1,6 @@
+import { memo } from 'react';
 import { X } from 'lucide-react';
+import { getThumbnail } from '@/lib/youtube';
 
 interface Song {
   id: string;
@@ -13,31 +15,11 @@ interface QueuePreviewProps {
   onRemoveSong?: (songId: string) => void;
 }
 
-export function QueuePreview({ playlist, onRemoveSong }: QueuePreviewProps) {
+// Manual memo. Remove when React Compiler is enabled (currently blocked: SWC plugin support pending).
+export const QueuePreview = memo(function QueuePreview({ playlist, onRemoveSong }: QueuePreviewProps) {
   if (playlist.length === 0) {
     return null;
   }
-
-  const getVideoId = (url: string): string | null => {
-    const patterns = [
-      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
-      /youtube\.com\/shorts\/([^&\n?#]+)/,
-    ];
-
-    for (const pattern of patterns) {
-      const match = url.match(pattern);
-      if (match) return match[1];
-    }
-    return null;
-  };
-
-  const getThumbnail = (url: string): string => {
-    const videoId = getVideoId(url);
-    if (videoId) {
-      return `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
-    }
-    return '';
-  };
 
   return (
     <div className="queue-preview-container">
@@ -93,4 +75,4 @@ export function QueuePreview({ playlist, onRemoveSong }: QueuePreviewProps) {
       </div>
     </div>
   );
-}
+});

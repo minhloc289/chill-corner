@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useId, useRef, useState } from 'react';
 import { Button } from './ui/button';
 import { Play, Pause, SkipForward, CirclePause, CirclePlay, ChevronDown, Plus, ListMusic } from 'lucide-react';
 import { Card } from './ui/card';
@@ -6,6 +6,8 @@ import { YouTubeSearchTab } from './YouTubeSearchTab';
 import { VolumeControl } from './VolumeControl';
 import { ProgressBar } from './ProgressBar';
 import { QueuePreview } from './QueuePreview';
+import { getVideoId, getThumbnail } from '@/lib/youtube';
+import { useDriftCorrection } from './youtube/useDriftCorrection';
 
 // Default ambient music for when queue is empty
 // Using shorter, confirmed-working videos instead of live streams for better reliability
@@ -49,16 +51,21 @@ declare global {
   }
 }
 
-export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemoveSong, isPaused = false, onTogglePause, isChatOpen = true }: YouTubePlayerProps) {
+// Manual memo. Remove when React Compiler is enabled (currently blocked: SWC plugin support pending).
+export const YouTubePlayer = memo(function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemoveSong, isPaused = false, onTogglePause, isChatOpen = true }: YouTubePlayerProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const playerRef = useRef<any>(null);
-  const playerContainerId = useRef(`youtube-player-${Math.random().toString(36).substr(2, 9)}`);
+  // useId is SSR-safe and stable per instance — replaces Math.random() for
+  // generating a unique DOM container id for the YouTube IFrame player.
+  // React-generated ids contain ":" which is invalid in CSS/DOM selectors,
+  // so we sanitize before using as an element id.
+  const reactId = useId();
+  const playerContainerId = useRef(`youtube-player-${reactId.replace(/:/g, '')}`);
   const [isReady, setIsReady] = useState(false);
   const [apiReady, setApiReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
-  const syncIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [isPlayingDefault, setIsPlayingDefault] = useState(false);
   const [currentDefaultIndex, setCurrentDefaultIndex] = useState(0);
   const defaultMusicStartedAt = useRef<number>(0);
@@ -72,20 +79,6 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
     currentDefaultIndexRef.current = currentDefaultIndex;
     onSkipRef.current = onSkip;
   }, [isPlayingDefault, currentDefaultIndex, onSkip]);
-
-  // Extract YouTube video ID from URL
-  const getVideoId = (url: string): string | null => {
-    const patterns = [
-      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
-      /youtube\.com\/shorts\/([^&\n?#]+)/,
-    ];
-
-    for (const pattern of patterns) {
-      const match = url.match(pattern);
-      if (match) return match[1];
-    }
-    return null;
-  };
 
   // Load YouTube IFrame API
   useEffect(() => {
@@ -254,46 +247,18 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
     }
   }, [currentSong, playlist.length, isReady, currentVideoId, isPlayingDefault, currentDefaultIndex, isPaused]);
 
-  // Periodic sync check to keep playback aligned (only for user songs, not default music)
-  useEffect(() => {
-    // Clear any existing interval
-    if (syncIntervalRef.current) {
-      clearInterval(syncIntervalRef.current);
-    }
-
-    // Only sync if we have a USER song (not default music), player is ready, and not paused
-    if (!currentSong || !isReady || !playerRef.current || !currentVideoId || isPlayingDefault || isPaused) {
-      return;
-    }
-
-    // Check sync every 3 seconds
-    syncIntervalRef.current = setInterval(() => {
-      if (!playerRef.current || !currentSong) return;
-
-      try {
-        const currentTime = playerRef.current.getCurrentTime();
-        const startedAt = new Date(currentSong.startedAt).getTime();
-        const now = Date.now();
-        const expectedTime = (now - startedAt) / 1000;
-        const drift = Math.abs(currentTime - expectedTime);
-
-        // Tighter drift tolerance (1.5s) for better cross-user sync
-        if (drift > 1.5) {
-          playerRef.current.seekTo(expectedTime, true);
-          const state = playerRef.current.getPlayerState();
-          if (state !== window.YT.PlayerState.PLAYING) {
-            playerRef.current.playVideo();
-          }
-        }
-      } catch { /* ignore */ }
-    }, 3000);
-
-    return () => {
-      if (syncIntervalRef.current) {
-        clearInterval(syncIntervalRef.current);
-      }
-    };
-  }, [currentSong, isReady, currentVideoId, isPlayingDefault, isPaused]);
+  // Drift correction is extracted to a hook keyed on primitive deps so the
+  // interval re-binds only on actual song change, not on object-identity
+  // churn from the {url, title, startedAt} memo. Threshold is 1.5 s.
+  useDriftCorrection({
+    playerRef,
+    currentSongUrl: currentSong?.url ?? null,
+    currentSongStartedAt: currentSong?.startedAt ?? null,
+    isReady,
+    isPaused,
+    isPlayingDefault,
+    hasCurrentVideoId: !!currentVideoId,
+  });
 
   // Room-wide pause/resume: react to isPaused from room state
   useEffect(() => {
@@ -319,14 +284,6 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
     } else {
       playerRef.current.playVideo();
     }
-  };
-
-  const getThumbnail = (url: string): string => {
-    const videoId = getVideoId(url);
-    if (videoId) {
-      return `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
-    }
-    return '';
   };
 
   const currentThumbnail = currentSong
@@ -506,4 +463,4 @@ export function YouTubePlayer({ currentSong, playlist, onAddSong, onSkip, onRemo
       )}
     </div>
   );
-}
+});

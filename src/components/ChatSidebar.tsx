@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef, useLayoutEffect, memo, useCallback, useMemo, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
 import type { EmojiClickData, EmojiStyle } from 'emoji-picker-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Popover, PopoverTrigger, PopoverContent } from './ui/popover';
-import { Send, Check, X, LogIn, LogOut, Sparkles, PenLine, Pencil, Smile, SmilePlus, Reply, CornerUpLeft, Zap } from 'lucide-react';
+import { Send, Check, X, Pencil, Smile, Zap } from 'lucide-react';
 import {
   getUserColor,
   getUserId,
@@ -13,6 +13,9 @@ import {
   isJumboEmojiMessage,
   playBuzzSound,
 } from '@/lib/roomUtils';
+import { useChatScroll } from './chat/useChatScroll';
+import { MessageItem, type ProcessedMessage } from './chat/MessageItem';
+import { groupReactions } from './chat/MessageReactions';
 
 // Lazy-load the picker so the ~80 KB chunk only hits the network
 // when the user first opens the smiley popover. `preloadEmojiPicker`
@@ -20,9 +23,6 @@ import {
 // subsequent calls are no-ops because the module is already cached.
 const preloadEmojiPicker = () => import('emoji-picker-react');
 const EmojiPicker = lazy(preloadEmojiPicker);
-
-// Messenger's canonical reaction set — fixed, no picker needed.
-const QUICK_REACTIONS = ['❤️', '😆', '😮', '😢', '😡', '👍'] as const;
 
 interface Message {
   id: string;
@@ -67,258 +67,6 @@ interface ChatSidebarProps {
   isOpen: boolean;
 }
 
-interface ProcessedMessage extends Message {
-  formattedTime: string;
-  userColor: string;
-  isGrouped: boolean;
-  isSelf: boolean;
-  isJumbo: boolean;
-  daySeparator: string | null;
-}
-
-const systemIconFor = (message: string) => {
-  if (message.includes('joined')) return { Icon: LogIn, cls: 'sys-color-join' };
-  if (message.includes('left')) return { Icon: LogOut, cls: 'sys-color-leave' };
-  if (message.includes('is now')) return { Icon: PenLine, cls: 'sys-color-rename' };
-  return { Icon: Sparkles, cls: 'sys-color-default' };
-};
-
-interface GroupedReaction {
-  emoji: string;
-  count: number;
-  hasMine: boolean;
-  reactions: Reaction[];
-}
-
-const groupReactions = (reactions: Reaction[] | undefined, currentUserId: string): GroupedReaction[] => {
-  if (!reactions || reactions.length === 0) return [];
-  const byEmoji = new Map<string, GroupedReaction>();
-  for (const r of reactions) {
-    const existing = byEmoji.get(r.emoji);
-    if (existing) {
-      existing.count += 1;
-      existing.reactions.push(r);
-      if (r.user_id === currentUserId) existing.hasMine = true;
-    } else {
-      byEmoji.set(r.emoji, {
-        emoji: r.emoji,
-        count: 1,
-        hasMine: r.user_id === currentUserId,
-        reactions: [r],
-      });
-    }
-  }
-  return Array.from(byEmoji.values());
-};
-
-interface MessageItemProps {
-  msg: ProcessedMessage;
-  reactions: Reaction[] | undefined;
-  currentUserId: string;
-  onReact: (messageId: string, emoji: string) => void;
-  onUnreact: (messageId: string, emoji: string) => void;
-  onReplyRequest: (msg: Message) => void;
-  onJumpToMessage: (messageId: string) => void;
-}
-
-const MessageItem = memo(({ msg, reactions, currentUserId, onReact, onUnreact, onReplyRequest, onJumpToMessage }: MessageItemProps) => {
-  const [paletteOpen, setPaletteOpen] = useState(false);
-  // Only one reactor-list popover at a time per message — track which
-  // emoji's list is open (or null when nothing is open).
-  const [openEmoji, setOpenEmoji] = useState<string | null>(null);
-
-  if (msg.message_type === 'system') {
-    const { Icon, cls } = systemIconFor(msg.message);
-    return (
-      <div className="message message-system">
-        <Icon className={`sys-lucide ${cls}`} />
-        <span className="message-text-system">{msg.message}</span>
-      </div>
-    );
-  }
-
-  if (msg.message_type === 'buzz') {
-    return (
-      <div className="message message-buzz" role="status">
-        <Zap className="message-buzz-icon" />
-        <span className="message-buzz-text">
-          <strong style={{ color: msg.userColor }}>{msg.username}</strong>
-          {' buzzed the room!'}
-        </span>
-      </div>
-    );
-  }
-
-  const groupedReactions = groupReactions(reactions, currentUserId);
-
-  const handleRemoveMine = (emoji: string) => {
-    onUnreact(msg.id, emoji);
-    setOpenEmoji(null);
-  };
-
-  const handlePalettePick = (emoji: string) => {
-    const hasMine = groupedReactions.find((g) => g.emoji === emoji)?.hasMine ?? false;
-    if (hasMine) onUnreact(msg.id, emoji);
-    else onReact(msg.id, emoji);
-    setPaletteOpen(false);
-  };
-
-  const bubbleClass = msg.isJumbo
-    ? 'msg-bubble-jumbo'
-    : `msg-bubble ${msg.isSelf ? 'msg-bubble-self' : 'msg-bubble-other'}`;
-
-  return (
-    <div
-      className={`message msg-row ${msg.isSelf ? 'msg-self' : 'msg-other'} ${msg.isGrouped ? 'msg-grouped' : ''}`}
-    >
-      {!msg.isSelf && !msg.isGrouped && (
-        <div className="msg-avatar" style={{ backgroundColor: msg.userColor }}>
-          {msg.username[0].toUpperCase()}
-        </div>
-      )}
-      {!msg.isSelf && msg.isGrouped && <div className="msg-avatar-spacer" />}
-
-      <div className="msg-bubble-wrap">
-        {(msg.reply_to_id || msg.reply_to_message) && msg.reply_to_username && (
-          <button
-            type="button"
-            className="msg-reply-quote"
-            onClick={() => msg.reply_to_id && onJumpToMessage(msg.reply_to_id)}
-            title={msg.reply_to_id ? `Jump to ${msg.reply_to_username}'s message` : 'Original is no longer in view'}
-            disabled={!msg.reply_to_id}
-          >
-            <span className="msg-reply-quote-header">
-              <CornerUpLeft className="msg-reply-quote-icon" />
-              <span className="msg-reply-quote-name">{msg.reply_to_username}</span>
-            </span>
-            <span className="msg-reply-quote-snippet">{msg.reply_to_message}</span>
-          </button>
-        )}
-        <div className="msg-bubble-and-react">
-          <div className={bubbleClass}>
-            {!msg.isJumbo && !msg.isSelf && !msg.isGrouped && (
-              <div className="msg-bubble-name" style={{ color: msg.userColor }}>{msg.username}</div>
-            )}
-            <span className="msg-bubble-text">{msg.message}</span>
-          </div>
-          <div className="msg-actions-group">
-            <button
-              type="button"
-              className="msg-action-btn msg-reply-btn"
-              onClick={() => onReplyRequest(msg)}
-              aria-label="Reply"
-              title="Reply"
-            >
-              <Reply className="h-3.5 w-3.5" />
-            </button>
-            <Popover open={paletteOpen} onOpenChange={setPaletteOpen}>
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  className="msg-action-btn msg-react-btn"
-                  aria-label="Add reaction"
-                  title="Add reaction"
-                >
-                  <SmilePlus className="h-3.5 w-3.5" />
-                </button>
-              </PopoverTrigger>
-              <PopoverContent
-                className="msg-react-palette"
-                side="top"
-                align={msg.isSelf ? 'end' : 'start'}
-                sideOffset={6}
-              >
-                {QUICK_REACTIONS.map((emoji) => {
-                  const mine = groupedReactions.find((g) => g.emoji === emoji)?.hasMine ?? false;
-                  return (
-                    <button
-                      key={emoji}
-                      type="button"
-                      className={`msg-react-palette-btn ${mine ? 'is-mine' : ''}`}
-                      onClick={() => handlePalettePick(emoji)}
-                      aria-label={`React with ${emoji}`}
-                    >
-                      {emoji}
-                    </button>
-                  );
-                })}
-              </PopoverContent>
-            </Popover>
-          </div>
-        </div>
-        {groupedReactions.length > 0 && (
-          <div className="msg-reactions-row">
-            {groupedReactions.map((g) => (
-              <Popover
-                key={g.emoji}
-                open={openEmoji === g.emoji}
-                onOpenChange={(open) => setOpenEmoji(open ? g.emoji : null)}
-              >
-                <PopoverTrigger asChild>
-                  <button
-                    type="button"
-                    className={`msg-reaction-chip ${g.hasMine ? 'is-mine' : ''}`}
-                    aria-label={`${g.count} ${g.emoji} reaction${g.count > 1 ? 's' : ''} — click to see who`}
-                  >
-                    <span className="msg-reaction-chip-emoji">{g.emoji}</span>
-                    <span className="msg-reaction-chip-count">{g.count}</span>
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent
-                  className="msg-reactors-popover"
-                  side="top"
-                  align={msg.isSelf ? 'end' : 'start'}
-                  sideOffset={6}
-                >
-                  <div className="msg-reactors-header">
-                    <span className="msg-reactors-header-emoji">{g.emoji}</span>
-                    <span className="msg-reactors-header-count">
-                      {g.count} reaction{g.count === 1 ? '' : 's'}
-                    </span>
-                  </div>
-                  <ul className="msg-reactors-list">
-                    {g.reactions.map((r) => {
-                      const mine = r.user_id === currentUserId;
-                      return (
-                        <li
-                          key={r.id}
-                          className={`msg-reactor-row ${mine ? 'msg-reactor-row-mine' : ''}`}
-                        >
-                          <span
-                            className="msg-reactor-avatar"
-                            style={{ backgroundColor: getUserColor(r.user_id) }}
-                          >
-                            {r.username[0].toUpperCase()}
-                          </span>
-                          <span className="msg-reactor-name">
-                            {r.username}
-                            {mine && <span className="msg-reactor-you"> (you)</span>}
-                          </span>
-                          {mine && (
-                            <button
-                              type="button"
-                              className="msg-reactor-remove"
-                              onClick={() => handleRemoveMine(g.emoji)}
-                              aria-label="Remove your reaction"
-                            >
-                              Remove
-                            </button>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </PopoverContent>
-              </Popover>
-            ))}
-          </div>
-        )}
-        <span className="msg-bubble-time">{msg.formattedTime}</span>
-      </div>
-    </div>
-  );
-});
-MessageItem.displayName = 'MessageItem';
 
 export function ChatSidebar({
   messages,
@@ -344,13 +92,14 @@ export function ChatSidebar({
 
   const currentUserId = useMemo(() => getUserId(), []);
 
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const bottomSentinelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const prevMessageCountRef = useRef(0);
-  const isNearBottomRef = useRef(true);
   const justSentRef = useRef(false);
   const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const { scrollContainerRef, bottomSentinelRef, handleScroll } = useChatScroll({
+    messagesLength: messages.length,
+    justSentRef,
+  });
 
   // Derived: last chat message per user_id for preview + sort
   const lastActivityByUser = useMemo(() => {
@@ -390,6 +139,9 @@ export function ChatSidebar({
     });
   }, [members, currentUsername, currentUserId, lastActivityByUser]);
 
+  // Pre-compute every per-message thing once per render here, including
+  // groupedReactions — previously this ran inside MessageItem on every
+  // re-render of every item, which scaled badly when reactions arrived.
   const processedMessages = useMemo<ProcessedMessage[]>(() => {
     let prevDay = '';
     return messages.map((msg, index) => {
@@ -416,9 +168,10 @@ export function ChatSidebar({
         // Quote cards own the visual weight — don't also jumbo-ify the text.
         isJumbo: !hasReply && msg.message_type === 'chat' && isJumboEmojiMessage(msg.message),
         daySeparator,
+        groupedReactions: groupReactions(reactionsByMessage[msg.id], currentUserId),
       };
     });
-  }, [messages, currentUserId]);
+  }, [messages, currentUserId, reactionsByMessage]);
 
   // Live-status tier derived from recency of the last chat message.
   // Drives both the dot color and the label ("LIVE NOW" vs "active Xm").
@@ -447,97 +200,6 @@ export function ChatSidebar({
       return () => window.clearTimeout(t);
     }
   }, [sortedMembers.length]);
-
-  // Instant scroll — no animation race, no Radix, no scrollIntoView.
-  const scrollToBottom = useCallback(() => {
-    const el = scrollContainerRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, []);
-
-  // Fallback scroll-based near-bottom check. The authoritative signal
-  // is the IntersectionObserver on the bottom sentinel (see below) —
-  // this is kept so the very first scrollToBottom during mount has a
-  // reasonable default. Threshold widened from 80px to 200px so a
-  // casual trackpad nudge doesn't unpin auto-scroll.
-  const handleScroll = useCallback(() => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
-    isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 200;
-  }, []);
-
-  // After each DOM commit that added messages: scroll only when the user
-  // was already near the bottom OR just sent a message themselves. If
-  // they're scrolled up reading history, their position is preserved
-  // and no toasts interrupt them.
-  useLayoutEffect(() => {
-    const currentCount = messages.length;
-    const prevCount = prevMessageCountRef.current;
-
-    if (currentCount > prevCount && currentCount > 0) {
-      if (justSentRef.current || isNearBottomRef.current) {
-        scrollToBottom();
-        justSentRef.current = false;
-      }
-    }
-
-    prevMessageCountRef.current = currentCount;
-  }, [messages, scrollToBottom]);
-
-  // Authoritative "am I at the bottom?" signal. An IntersectionObserver
-  // on an invisible sentinel at the end of the list reports reliably
-  // whether the bottom is in view, regardless of whether scroll events
-  // fire (they don't fire when content grows without user interaction,
-  // which is what left isNearBottomRef stale over long sessions).
-  // A `rootMargin` of 200px means "still counts as bottom if within
-  // 200px" — matches the scroll fallback threshold.
-  useEffect(() => {
-    const root = scrollContainerRef.current;
-    const target = bottomSentinelRef.current;
-    if (!root || !target) return;
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        isNearBottomRef.current = entry.isIntersecting;
-      },
-      { root, threshold: 0, rootMargin: '0px 0px 200px 0px' },
-    );
-    io.observe(target);
-    return () => io.disconnect();
-  }, []);
-
-  // Re-pin to bottom when layout settles after the initial load.
-  // useLayoutEffect's scrollHeight snapshot can be stale because Google
-  // Fonts (Press Start 2P, Inter) load asynchronously — after the swap,
-  // every bubble's text metrics change and scrollHeight grows, leaving
-  // the previous scrollTop stranded partway through history. A
-  // ResizeObserver on the scroll content catches that (and any other
-  // late layout change) and re-pins — but only while the user hasn't
-  // scrolled up to read history.
-  useEffect(() => {
-    const scrollEl = scrollContainerRef.current;
-    if (!scrollEl) return;
-    const content = scrollEl.firstElementChild;
-    if (!content) return;
-    const ro = new ResizeObserver(() => {
-      if (isNearBottomRef.current) scrollToBottom();
-    });
-    ro.observe(content);
-    return () => ro.disconnect();
-  }, [scrollToBottom]);
-
-  // Belt-and-suspenders for the font-swap race: fire one final re-pin
-  // once webfonts are fully ready, in case the ResizeObserver missed
-  // the settling frame.
-  useEffect(() => {
-    if (!('fonts' in document)) return;
-    let cancelled = false;
-    document.fonts.ready.then(() => {
-      if (cancelled) return;
-      if (isNearBottomRef.current) scrollToBottom();
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [scrollToBottom]);
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.currentTarget.value;
@@ -841,7 +503,6 @@ export function ChatSidebar({
                 )}
                 <MessageItem
                   msg={msg}
-                  reactions={reactionsByMessage[msg.id]}
                   currentUserId={currentUserId}
                   onReact={onReact}
                   onUnreact={onUnreact}

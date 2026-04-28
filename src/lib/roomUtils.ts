@@ -101,6 +101,24 @@ export function getUserColor(userId: string): string {
   return PASTEL_USER_COLORS[Math.abs(hash) % PASTEL_USER_COLORS.length];
 }
 
+// --- Module-level Intl instances (hoisted for performance) ---
+// Constructing Intl.* objects is non-trivial; reusing a single instance
+// per format pattern avoids the per-call allocation cost across hundreds
+// of message rows.
+const SEGMENTER =
+  typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function'
+    ? new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+    : null;
+
+const SHORT_WEEKDAY_FMT = new Intl.DateTimeFormat('en-US', { weekday: 'short' });
+const LONG_WEEKDAY_FMT = new Intl.DateTimeFormat('en-US', { weekday: 'long' });
+const MONTH_DAY_FMT = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
+const MESSAGE_TIME_FMT = new Intl.DateTimeFormat('en-US', {
+  hour: 'numeric',
+  minute: '2-digit',
+  hour12: true,
+});
+
 // Short relative time: "now", "2m", "1h", "yesterday", "Apr 10"
 export function formatRelativeTime(iso: string, now: Date = new Date()): string {
   const then = new Date(iso);
@@ -112,17 +130,13 @@ export function formatRelativeTime(iso: string, now: Date = new Date()): string 
   if (hours < 24 && now.getDate() === then.getDate()) return `${hours}h`;
   const dayDiff = Math.floor((now.setHours(0, 0, 0, 0) - new Date(then).setHours(0, 0, 0, 0)) / 86_400_000);
   if (dayDiff === 1) return 'yesterday';
-  if (dayDiff < 7) return then.toLocaleDateString('en-US', { weekday: 'short' });
-  return then.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  if (dayDiff < 7) return SHORT_WEEKDAY_FMT.format(then);
+  return MONTH_DAY_FMT.format(then);
 }
 
 // Clock-style timestamp for message rows
 export function formatMessageTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
+  return MESSAGE_TIME_FMT.format(new Date(iso));
 }
 
 // Messenger-style "jumbo" emoji: a chat message made of only 1–3 emoji
@@ -133,12 +147,11 @@ const EMOJI_ONLY_RE = /^[\p{Extended_Pictographic}\p{Emoji_Component}\uFE0F\u200
 export function isJumboEmojiMessage(text: string): boolean {
   const trimmed = text.trim();
   if (!trimmed) return false;
-  if (typeof Intl === 'undefined' || typeof Intl.Segmenter !== 'function') {
+  if (!SEGMENTER) {
     return trimmed.length <= 8 && EMOJI_ONLY_RE.test(trimmed);
   }
-  const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
   let count = 0;
-  for (const { segment } of segmenter.segment(trimmed)) {
+  for (const { segment } of SEGMENTER.segment(trimmed)) {
     if (!EMOJI_ONLY_RE.test(segment)) return false;
     count += 1;
     if (count > 3) return false;
@@ -154,6 +167,6 @@ export function formatDateSeparator(iso: string, now: Date = new Date()): string
   const diffDays = Math.round((startToday - startThen) / 86_400_000);
   if (diffDays === 0) return 'TODAY';
   if (diffDays === 1) return 'YESTERDAY';
-  if (diffDays < 7) return then.toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase();
-  return then.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toUpperCase();
+  if (diffDays < 7) return LONG_WEEKDAY_FMT.format(then).toUpperCase();
+  return MONTH_DAY_FMT.format(then).toUpperCase();
 }

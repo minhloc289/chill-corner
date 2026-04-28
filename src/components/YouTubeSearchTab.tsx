@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { Search, Link, Plus } from 'lucide-react';
+import { getVideoId } from '@/lib/youtube';
 
 interface YouTubeSearchTabProps {
   onVideoSelect: (url: string, title: string) => void;
@@ -22,18 +23,6 @@ export function YouTubeSearchTab({ onVideoSelect }: YouTubeSearchTabProps) {
   // and replay its CSS animation from the start.
   const [burstKey, setBurstKey] = useState(0);
 
-  const extractVideoId = (url: string) => {
-    const patterns = [
-      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
-      /^([a-zA-Z0-9_-]{11})$/
-    ];
-    for (const pattern of patterns) {
-      const match = url.match(pattern);
-      if (match) return match[1];
-    }
-    return null;
-  };
-
   const isYouTubeUrl = (text: string) => {
     return text.includes('youtube.com/') || text.includes('youtu.be/');
   };
@@ -46,7 +35,7 @@ export function YouTubeSearchTab({ onVideoSelect }: YouTubeSearchTabProps) {
 
   const handleAddUrl = async (url: string) => {
     if (!url.trim()) return;
-    const videoId = extractVideoId(url);
+    const videoId = getVideoId(url);
     if (!videoId) {
       alert('Invalid YouTube URL');
       return;

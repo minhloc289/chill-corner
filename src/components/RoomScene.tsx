@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Shuffle } from 'lucide-react';
 
 interface RoomSceneProps {
@@ -30,7 +30,8 @@ const SPARKLE_POSITIONS = [
   { left: '93%', delay: '5s',   color: 'var(--pixel-accent-sky)' },
 ];
 
-export function RoomScene({ scenePreset, onSceneChange }: RoomSceneProps) {
+// Manual memo. Remove when React Compiler is enabled (currently blocked: SWC plugin support pending).
+export const RoomScene = memo(function RoomScene({ scenePreset, onSceneChange }: RoomSceneProps) {
   const [hearts, setHearts] = useState<number[]>([]);
 
   const currentIndex = scenePresets.findIndex((s) => s.id === scenePreset);
@@ -112,4 +113,4 @@ export function RoomScene({ scenePreset, onSceneChange }: RoomSceneProps) {
       </button>
     </div>
   );
-}
+});
